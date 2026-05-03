@@ -226,15 +226,13 @@ def extract_key_ratios(df):
 # ==========================================
 # УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (GOOGLE SHEETS)
 # ==========================================
-worksheet = None # Глобальная переменная-предохранитель
+worksheet = None
 
 try:
     if "google_json" in st.secrets:
         creds_json = st.secrets["google_json"]
         creds_dict = json.loads(creds_json)
         gc = gspread.service_account_from_dict(creds_dict)
-        
-        # Если боту не дали доступ к таблице, тут будет ошибка SpreadsheetNotFound
         sh = gc.open("Pax_Database")
         worksheet = sh.sheet1
         
@@ -257,47 +255,31 @@ try:
         raise Exception("Secret 'google_json' not found")
         
 except Exception as e:
-    if "200" in str(e):
-        st.sidebar.success("🟢 Connected to Cloud Database")
-        df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+    st.sidebar.error(f"🔴 Offline Mode (Check Secrets or Access)")
+    if os.path.exists("watchlist.csv"):
+        df_watchlist = pd.read_csv("watchlist.csv")
     else:
-        st.sidebar.error(f"🔴 Offline Mode (No Google Access)")
-        if os.path.exists("watchlist.csv"):
-            df_watchlist = pd.read_csv("watchlist.csv")
-        else:
-            df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+        df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
 def save_db(df):
     global worksheet
     try:
-        # Теперь сохраняем в облако только если worksheet реально существует
         if "google_json" in st.secrets and worksheet is not None:
-            df_clean = df.copy()
-            df_clean = df_clean.fillna("") 
+            df_clean = df.copy().fillna("")
             data_to_save = [df_clean.columns.tolist()] + df_clean.values.tolist()
             
             worksheet.clear()
             
+            # Бронебойная запись: работает на любой версии gspread
             try:
-                v = int(gspread.__version__.split('.')[0])
-            except:
-                v = 5
-                
-            try:
-                if v >= 6:
-                    worksheet.update(values=data_to_save, range_name="A1")
-                else:
-                    worksheet.update("A1", data_to_save)
-            except Exception as write_err:
-                if "200" not in str(write_err):
-                    raise write_err 
+                worksheet.update(values=data_to_save, range_name="A1")
+            except TypeError:
+                worksheet.update("A1", data_to_save)
         else:
-            # Безопасное сохранение локально, если нет связи
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
-        if "200" not in str(e):
-            st.error(f"Database Save Error: {e}")
-            df.to_csv("watchlist.csv", index=False)
+        st.error(f"⚠️ Ошибка при сохранении в облако: {e}")
+        df.to_csv("watchlist.csv", index=False)
 
 
 # ==========================================
