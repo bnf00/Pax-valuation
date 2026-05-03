@@ -78,7 +78,6 @@ st.markdown("""
 # ==========================================
 # RATIO EXPLANATIONS & CORE FUNCTIONS
 # ==========================================
-# ВОССТАНОВЛЕНЫ ВСЕ 10 КОЭФФИЦИЕНТОВ
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
     "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory.",
@@ -220,7 +219,6 @@ def extract_relative_valuation_data(df):
     return results
 
 def extract_key_ratios(df):
-    # ВОССТАНОВЛЕНЫ ВСЕ 10 КОЭФФИЦИЕНТОВ
     target_ratios = {
         "Current Ratio": ["current ratio"], "ACID-Test Ratio": ["acid-test", "quick ratio"],
         "A/R Turnover": ["receivable turnover"], "Inventory Turnover": ["inventory turnover"],
@@ -526,7 +524,6 @@ if app_mode == "Terminal (Analysis)":
                     for t in tickers_to_compare:
                         row = df_watchlist[df_watchlist['Stock'] == t]
                         
-                        # ИСПРАВЛЕНИЕ: Форматируем Intrinsic Value, чтобы было красиво (например, $109.42)
                         iv_val = row['Intrinsic value'].values[0] if not row.empty else "N/A"
                         try:
                             formatted_iv = f"${float(iv_val):,.2f}" if pd.notna(iv_val) and iv_val != "" else "N/A"
