@@ -225,11 +225,21 @@ DB_FILE = "watchlist.csv"
 
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
+    
+    # ФИКС ОШИБКИ TYPEERROR: Принудительно делаем эти колонки текстовыми (object)
+    # Чтобы pandas разрешил нам записывать туда проценты вроде "+15.00%"
+    for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
+        if col in df_watchlist.columns:
+            df_watchlist[col] = df_watchlist[col].astype('object')
+            
     if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
     if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
     if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
 else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+    # Сразу задаем тип данных
+    for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
+        df_watchlist[col] = df_watchlist[col].astype('object')
 
 def save_db(df):
     df.to_csv(DB_FILE, index=False)
@@ -284,6 +294,7 @@ if app_mode == "Terminal (Analysis)":
                         real_ticker, real_name = search_company(nt)
                         price = get_current_price(real_ticker)
                         new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
+                        for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]: new_row[col] = new_row[col].astype('object')
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
                         save_db(df_watchlist)
                         st.rerun()
@@ -440,7 +451,7 @@ if app_mode == "Terminal (Analysis)":
                                         else: st.metric(label=f"Implied by {clean_peer}", value=f"${val:,.2f}")
                                 if st.button(f"Sync Average ({item['Metric']}): ${avg_val:,.2f}", key=f"sync_xl_{selected_ticker}_{item['Metric']}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = avg_val
-                                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], avg_val)
+                                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), avg_val)
                                     save_db(df_watchlist)
                                     st.success(f"Watchlist updated!")
                                 st.markdown("<hr>", unsafe_allow_html=True)
@@ -457,7 +468,7 @@ if app_mode == "Terminal (Analysis)":
                                     if isinstance(current_p, (int, float)) and current_p > 0: st.metric(label="Upside / Downside", value=f"{abs(((val - current_p) / current_p) * 100):.2f}%", delta=f"{((val - current_p) / current_p) * 100:.2f}%")
                                 if st.button(f"Sync '{label}' (${val:,.2f}) to Watchlist", key=f"sync_xl_{selected_ticker}_{label}_{val}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = val
-                                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], val)
+                                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), val)
                                     save_db(df_watchlist)
                                     st.success(f"Watchlist updated!")
                                 st.markdown("<br>", unsafe_allow_html=True)
@@ -573,7 +584,7 @@ elif app_mode == "My Portfolio":
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: VALUATION LAB (NEW PAGE)
+# РОУТИНГ: VALUATION LAB 
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
@@ -586,7 +597,6 @@ elif app_mode == "Valuation Lab":
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
 
-        # ЗАМЕНА RADIO-КНОПОК НА ВКЛАДКИ
         tab_ddm, tab_dcf, tab_rel = st.tabs([
             "1. Gordon Growth Model (DDM)", 
             "2. Multi-Stage Discounted Cash Flow (DCF)", 
@@ -610,9 +620,7 @@ elif app_mode == "Valuation Lab":
                     st.error("Error: Cost of Equity must be strictly greater than the Dividend Growth Rate for the Gordon model to work.")
                     intrinsic_value = 0.0
                 else:
-                    # Formula: P0 = D0 * (1 + g) / (Ke - g)
                     intrinsic_value = div_0 * (1 + g_div) / (ke - g_div)
-                    
                     m1, m2 = st.columns(2)
                     m1.metric("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):.2f}")
                     
@@ -625,7 +633,7 @@ elif app_mode == "Valuation Lab":
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0), key=f"sync_ddm_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
                     st.success(f"Watchlist updated!")
             
@@ -692,7 +700,7 @@ elif app_mode == "Valuation Lab":
                 
                 if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
                     st.success(f"Watchlist updated!")
                     
@@ -761,7 +769,7 @@ elif app_mode == "Valuation Lab":
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0), key=f"sync_rel_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
                     st.success(f"Watchlist updated!")
 
