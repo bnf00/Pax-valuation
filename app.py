@@ -59,6 +59,9 @@ add_bg_from_local()
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
+    /* УБИРАЕМ ЧЕРНУЮ ПОЛОСУ СВЕРХУ (Прозрачный хедер) */
+    header[data-testid="stHeader"] { background-color: transparent !important; }
+    
     .stApp { color: #e0d8c8; font-family: 'Inter', sans-serif; }
     .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
     
