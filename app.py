@@ -34,81 +34,91 @@ def add_bg_from_local():
     if bg_file:
         with open(bg_file, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode()
+            ext = "jpg" if "jpg" in bg_file.lower() else "png"
+            
+        # Стили для фона вынесены строго к левому краю, чтобы избежать багов парсера Markdown
         st.markdown(f"""
-        <style>
-        .stApp {{
-            background-image: url(data:image/{"jpg" if "jpg" in bg_file else "png"};base64,{encoded_string});
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
-        /* Делаем боковое меню полупрозрачным, чтобы фон был виден */
-        [data-testid="stSidebar"] {{
-            background-color: rgba(10, 8, 5, 0.7) !important;
-            backdrop-filter: blur(15px);
-            border-right: 1px solid rgba(212, 175, 55, 0.1);
-        }}
-        </style>
-        """, unsafe_allow_html=True)
+<style>
+.stApp {{
+    background-image: url(data:image/{ext};base64,{encoded_string});
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}}
+</style>
+""", unsafe_allow_html=True)
     else:
         st.warning("Background image not found. Please save it as 'bg.jpg' or 'bg.png' in the same folder as app.py.")
 
 add_bg_from_local()
 
-# Основные стили (Адаптированы под янтарно-золотую тему и матовое стекло)
+# ==========================================
+# СТРОГИЙ БЛОК CSS (БЕЗ ОТСТУПОВ)
+# ==========================================
+# Важно: строки ниже прижаты к левому краю, иначе Streamlit превратит их в обычный текст!
 st.markdown("""
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <style>
-    /* УБИРАЕМ ЧЕРНУЮ ПОЛОСУ СВЕРХУ (Прозрачный хедер) */
-    header[data-testid="stHeader"] { background-color: transparent !important; }
-    
-    .stApp { color: #e0d8c8; font-family: 'Inter', sans-serif; }
-    .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
-    
-    .nav-header { text-align: left; border-bottom: 1px solid rgba(212, 175, 55, 0.3); padding-bottom: 8px; margin-bottom: 20px; }
-    .nav-header h3 { margin: 0; padding: 0; color: #ffffff; font-size: 1.2rem; font-weight: 600; font-family: 'Inter', sans-serif; letter-spacing: 0.5px; }
-    
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.2); padding-right: 180px !important; }
-    .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
-    .stTabs [data-baseweb="tab"] p { color: #a39b8a !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
-    .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #d4af37 !important; }
-    .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; text-shadow: 0 0 10px rgba(212, 175, 55, 0.3); }
-    div[data-baseweb="tab-highlight"] { display: none !important; }
-    
-    /* GLASSMORPHISM для метрик */
-    div[data-testid="metric-container"] { 
-        background-color: rgba(15, 12, 8, 0.65); 
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(212, 175, 55, 0.15); 
-        padding: 15px 20px; 
-        border-radius: 8px; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
-    }
-    div[data-testid="metric-container"] label { color: #c4bcae !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; text-shadow: 0 0 15px rgba(212, 175, 55, 0.2); }
-    
-    hr { border-color: rgba(212, 175, 55, 0.2) !important; margin-top: 2rem; margin-bottom: 2rem; }
-    
-    .streamlit-expanderHeader { background-color: transparent !important; color: #d4af37 !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
-    div[data-testid="stExpanderDetails"] { border-left: 2px solid rgba(212, 175, 55, 0.4); padding-left: 15px; }
-    div[role="radiogroup"] > label { padding-bottom: 10px; font-family: 'Inter', sans-serif; }
-    
-    #active-company-anchor { display: none; }
-    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
-    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] { position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important; }
-    
-    /* Стилизация выпадающих списков под темное стекло */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: rgba(15, 12, 8, 0.5) !important; border: 1px solid rgba(212, 175, 55, 0.2) !important; backdrop-filter: blur(5px); cursor: pointer !important; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #e0d8c8 !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #d4af37 !important; }
-    div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
-    
-    /* Таблицы - убираем белый фон */
-    div[data-testid="stDataFrame"] { background-color: transparent !important; }
-    
-    .guide-box { background-color: rgba(15, 12, 8, 0.7); backdrop-filter: blur(10px); border-left: 4px solid #d4af37; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .guide-box h4 { color: #d4af37; margin-top: 0; }
-    </style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* УБИРАЕМ ЧЕРНУЮ ПОЛОСУ СВЕРХУ (Прозрачный хедер) */
+header[data-testid="stHeader"] { background-color: transparent !important; }
+
+/* ДЕЛАЕМ САЙДБАР ПРОЗРАЧНЫМ НА 90% (альфа-канал 0.1) */
+section[data-testid="stSidebar"] {
+    background-color: rgba(10, 8, 5, 0.1) !important;
+    backdrop-filter: blur(5px);
+    border-right: 1px solid rgba(212, 175, 55, 0.1);
+}
+section[data-testid="stSidebar"] > div { background-color: transparent !important; }
+[data-testid="stSidebarNav"] { background-color: transparent !important; }
+
+/* ОСНОВНЫЕ СТИЛИ ПРИЛОЖЕНИЯ */
+.stApp { color: #e0d8c8; font-family: 'Inter', sans-serif; }
+.block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
+
+.nav-header { text-align: left; border-bottom: 1px solid rgba(212, 175, 55, 0.3); padding-bottom: 8px; margin-bottom: 20px; }
+.nav-header h3 { margin: 0; padding: 0; color: #ffffff; font-size: 1.2rem; font-weight: 600; font-family: 'Inter', sans-serif; letter-spacing: 0.5px; }
+
+.stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.2); padding-right: 180px !important; }
+.stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
+.stTabs [data-baseweb="tab"] p { color: #a39b8a !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
+.stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #d4af37 !important; }
+.stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; text-shadow: 0 0 10px rgba(212, 175, 55, 0.3); }
+div[data-baseweb="tab-highlight"] { display: none !important; }
+
+/* GLASSMORPHISM для метрик */
+div[data-testid="metric-container"] { 
+    background-color: rgba(15, 12, 8, 0.65); 
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(212, 175, 55, 0.15); 
+    padding: 15px 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+}
+div[data-testid="metric-container"] label { color: #c4bcae !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
+div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; text-shadow: 0 0 15px rgba(212, 175, 55, 0.2); }
+
+hr { border-color: rgba(212, 175, 55, 0.2) !important; margin-top: 2rem; margin-bottom: 2rem; }
+
+.streamlit-expanderHeader { background-color: transparent !important; color: #d4af37 !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
+div[data-testid="stExpanderDetails"] { border-left: 2px solid rgba(212, 175, 55, 0.4); padding-left: 15px; }
+div[role="radiogroup"] > label { padding-bottom: 10px; font-family: 'Inter', sans-serif; }
+
+#active-company-anchor { display: none; }
+div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
+div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] { position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important; }
+
+/* Стилизация выпадающих списков под темное стекло */
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: rgba(15, 12, 8, 0.5) !important; border: 1px solid rgba(212, 175, 55, 0.2) !important; backdrop-filter: blur(5px); cursor: pointer !important; }
+div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #e0d8c8 !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
+div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #d4af37 !important; }
+div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
+
+/* Таблицы - убираем белый фон */
+div[data-testid="stDataFrame"] { background-color: transparent !important; }
+
+.guide-box { background-color: rgba(15, 12, 8, 0.7); backdrop-filter: blur(10px); border-left: 4px solid #d4af37; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.guide-box h4 { color: #d4af37; margin-top: 0; }
+</style>
 """, unsafe_allow_html=True)
 
 # ==========================================
@@ -319,7 +329,6 @@ st.sidebar.markdown("""
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
-    # ДИЗАЙН ЛОГОТИПА: Теплый янтарный цвет вместо синего
     st.markdown("""
         <div style="display: flex; align-items: center; margin-bottom: 30px;">
             <div style="background: linear-gradient(135deg, #f5c518 0%, #aa8c2c 100%); width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);">
@@ -446,7 +455,6 @@ if app_mode == "Terminal (Analysis)":
                 stock_obj = yf.Ticker(selected_ticker)
                 df_h = stock_obj.history(period=period_map[period_ui], interval=interval_map[interval_ui])
                 if not df_h.empty:
-                    # Изменяем цвет графика на золотой
                     fig = go.Figure(data=[go.Candlestick(x=df_h.index, open=df_h['Open'], high=df_h['High'], low=df_h['Low'], close=df_h['Close'], increasing_line_color='#d4af37', decreasing_line_color='#8a7122')])
                     iv_raw = df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'].values[0]
                     try:
