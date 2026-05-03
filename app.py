@@ -14,7 +14,7 @@ import json
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
-# Инициализация хранилища памяти (Session State), чтобы данные не аннулировались
+# Инициализация хранилища памяти (Session State)
 if 'v_state' not in st.session_state:
     st.session_state.v_state = {
         'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
@@ -30,6 +30,21 @@ st.markdown("""
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
     
+    /* Sidebar Navigation Header Styling */
+    .nav-header {
+        text-align: left; 
+        border-bottom: 1px solid #30363d; 
+        padding-bottom: 8px; 
+        margin-bottom: 20px;
+    }
+    .nav-header h3 {
+        margin: 0; 
+        padding: 0; 
+        color: #ffffff; 
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
     .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
@@ -230,13 +245,12 @@ def extract_key_ratios(df):
     return results
 
 # ==========================================
-# ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ (БЕЗ GOOGLE)
+# DATABASE MANAGEMENT (LOCAL CSV)
 # ==========================================
 DB_FILE = "watchlist.csv"
 
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
-    
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
         if col in df_watchlist.columns:
             df_watchlist[col] = df_watchlist[col].astype('object')
@@ -253,11 +267,11 @@ def save_db(df):
     df.to_csv(DB_FILE, index=False)
 
 # ==========================================
-# SIDEBAR NAVIGATION (ОБНОВЛЕННЫЙ ДИЗАЙН)
+# SIDEBAR NAVIGATION
 # ==========================================
 st.sidebar.markdown("""
-    <div style="text-align: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 20px;">
-        <h3 style="margin: 0; padding: 0; color: #ffffff;">Navigation</h3>
+    <div class="nav-header">
+        <h3>Navigation</h3>
     </div>
 """, unsafe_allow_html=True)
 
@@ -266,7 +280,7 @@ app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfoli
 def render_header():
     st.markdown("""
         <div style="margin-bottom: 25px;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">PAX</h1>
+            <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">Pax</h1>
             <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
         </div>
     """, unsafe_allow_html=True)
@@ -623,7 +637,6 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ DDM Assumptions")
-                # ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ЗНАЧЕНИЯ ИЗ SESSION STATE
                 st.session_state.v_state['ddm_div'] = st.number_input("Current Annual Dividend per Share ($)", value=float(st.session_state.v_state['ddm_div']), step=0.1)
                 st.session_state.v_state['ddm_g'] = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(st.session_state.v_state['ddm_g']), step=0.1, format="%f%%")
                 st.session_state.v_state['ddm_ke'] = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(st.session_state.v_state['ddm_ke']), step=0.5, format="%f%%")
@@ -649,7 +662,7 @@ elif app_mode == "Valuation Lab":
                         m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0)):
+                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0), key=f"sync_ddm_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
@@ -723,7 +736,7 @@ elif app_mode == "Valuation Lab":
                 fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
                 st.plotly_chart(fig_dcf, use_container_width=True)
                 
-                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True):
+                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
@@ -805,7 +818,7 @@ elif app_mode == "Valuation Lab":
                     m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}")
                 
                 st.markdown("<br><br>", unsafe_allow_html=True)
-                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0)):
+                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0), key=f"sync_rel_{selected_ticker}"):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
