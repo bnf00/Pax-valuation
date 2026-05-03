@@ -234,34 +234,38 @@ try:
         sh = gc.open("Pax_Database")
         worksheet = sh.sheet1
         
-        # БРОНЕБОЙНЫЙ МЕТОД ЧТЕНИЯ (без ошибок парсинга)
+        # Получаем данные без ошибок
         data = worksheet.get_all_values() 
-        if data:
+        if data and len(data) > 0:
             headers = data[0]
             if len(data) > 1:
                 df_watchlist = pd.DataFrame(data[1:], columns=headers)
             else:
                 df_watchlist = pd.DataFrame(columns=headers)
             
-            # Приводим типы данных
+            # Приводим типы
             if 'Shares' in df_watchlist.columns: df_watchlist['Shares'] = pd.to_numeric(df_watchlist['Shares'], errors='coerce').fillna(0.0)
             if 'Avg Cost' in df_watchlist.columns: df_watchlist['Avg Cost'] = pd.to_numeric(df_watchlist['Avg Cost'], errors='coerce').fillna(0.0)
             if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower().isin(['true', '1', 't', 'yes', 'y'])
         else:
-            # Создаем пустую структуру, если таблица пуста
+            # ЕСЛИ ТАБЛИЦА ПУСТАЯ, ПРОСТО СОЗДАЕМ ЛОКАЛЬНЫЙ ФРЕЙМ БЕЗ ЗАПИСИ (убирает ошибку 200)
             df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-            worksheet.append_row(df_watchlist.columns.tolist())
             
         st.sidebar.success("🟢 Connected to Cloud Database")
     else:
         raise Exception("Secret 'google_json' not found")
         
 except Exception as e:
-    st.sidebar.error(f"🔴 Offline Mode (Cloud error: {e})")
-    if os.path.exists("watchlist.csv"):
-        df_watchlist = pd.read_csv("watchlist.csv")
-    else:
+    # Заглушка для ложной ошибки Response 200 при загрузке
+    if "200" in str(e):
+        st.sidebar.success("🟢 Connected to Cloud Database")
         df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+    else:
+        st.sidebar.error(f"🔴 Offline Mode (Cloud error: {e})")
+        if os.path.exists("watchlist.csv"):
+            df_watchlist = pd.read_csv("watchlist.csv")
+        else:
+            df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
 def save_db(df):
     try:
@@ -270,14 +274,28 @@ def save_db(df):
             df_clean = df_clean.fillna("") 
             data_to_save = [df_clean.columns.tolist()] + df_clean.values.tolist()
             
-            # БРОНЕБОЙНЫЙ МЕТОД СОХРАНЕНИЯ (обходит баг <Response [200]>)
             worksheet.clear()
-            worksheet.append_rows(data_to_save) 
+            
+            # Универсальный метод записи (работает на всех версиях)
+            try:
+                v = int(gspread.__version__.split('.')[0])
+            except:
+                v = 5
+                
+            try:
+                if v >= 6:
+                    worksheet.update(values=data_to_save, range_name="A1")
+                else:
+                    worksheet.update("A1", data_to_save)
+            except Exception as write_err:
+                if "200" not in str(write_err):
+                    raise write_err # Поднимаем ошибку, только если это НЕ ложный Response 200
         else:
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
-        st.error(f"Database Save Error: {e}")
-        df.to_csv("watchlist.csv", index=False)
+        if "200" not in str(e):
+            st.error(f"Database Save Error: {e}")
+            df.to_csv("watchlist.csv", index=False)
 
 
 # ==========================================
@@ -662,3 +680,6 @@ elif app_mode == "My Portfolio":
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Avg Cost'] = row['Avg Cost']
             save_db(df_watchlist)
             st.rerun()
+            
+    else:
+        st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
