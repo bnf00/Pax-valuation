@@ -11,23 +11,88 @@ import json
 import datetime
 
 # ==========================================
-# 1. PAGE CONFIG & CSS
+# 1. PAGE CONFIG & PREMIUM CSS DESIGN
 # ==========================================
-st.set_page_config(page_title="Pax Valuation", layout="wide")
+st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
-    .block-container { padding-top: 4rem !important; }
-    .stTabs [data-baseweb="tab-list"] { justify-content: flex-end; border-bottom: 1px solid #333; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #1E2127 !important; border: 1px solid #333 !important;
-        border-bottom: none !important; border-radius: 4px 4px 0px 0px !important;
-        padding: 10px 24px !important; margin-left: 4px; height: auto !important;
+    /* Global Background and Text */
+    .stApp {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    .stTabs [data-baseweb="tab"] p { color: #A0A0A0 !important; font-weight: 600 !important; font-size: 14px !important; margin: 0 !important; }
-    .stTabs [aria-selected="true"] { background-color: #2b303b !important; border-top: 3px solid #FFFFFF !important; }
-    .stTabs [aria-selected="true"] p { color: #FFFFFF !important; }
+    
+    /* Container Padding */
+    .block-container { 
+        padding-top: 3rem !important; 
+        max-width: 95% !important;
+    }
+
+    /* Sleek Professional Tabs */
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 20px;
+        border-bottom: 1px solid #30363d;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 3px solid transparent !important;
+        border-radius: 0px !important;
+        padding: 10px 4px !important; 
+        height: auto !important;
+    }
+    .stTabs [data-baseweb="tab"] p { 
+        color: #8b949e !important; 
+        font-weight: 500 !important; 
+        font-size: 15px !important; 
+        margin: 0 !important; 
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: transparent !important; 
+        border-bottom: 3px solid #58a6ff !important; 
+    }
+    .stTabs [aria-selected="true"] p { 
+        color: #ffffff !important; 
+        font-weight: 600 !important;
+    }
     div[data-baseweb="tab-highlight"] { display: none !important; }
+
+    /* Elevated Metric Cards */
+    div[data-testid="metric-container"] {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    div[data-testid="metric-container"] label {
+        color: #8b949e !important;
+        font-weight: 500 !important;
+    }
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+
+    /* Clean Dividers */
+    hr {
+        border-color: #30363d !important;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Expander Styling */
+    .streamlit-expanderHeader {
+        background-color: transparent !important;
+        color: #58a6ff !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stExpanderDetails"] {
+        border-left: 2px solid #30363d;
+        padding-left: 15px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -113,12 +178,10 @@ def fetch_robust_news(ticker):
                 title = item.find('title').text if item.find('title') is not None else "No Title"
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
-                
                 if pub_date:
                     pub_date = pub_date.replace(" +0000", "").replace(" GMT", "")
-                    
                 articles.append({'title': title, 'link': link, 'date': pub_date})
-    except Exception as e:
+    except Exception:
         pass
     return articles
 
@@ -227,22 +290,13 @@ else:
 selected_ticker = st.sidebar.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
 st.sidebar.markdown("---")
 
+# --- ИЗМЕНЕНО: Строгий типографический заголовок без эмблемы ---
 def render_header():
     st.markdown("""
-        <div style="display: flex; align-items: center; margin-bottom: 25px;">
-            <svg width="55" height="55" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 18px;">
-                <rect width="50" height="50" rx="12" fill="#14161A" stroke="#2B303B" stroke-width="1"/>
-                <line x1="16" y1="34" x2="16" y2="24" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="4" stroke-linecap="round"/>
-                <line x1="25" y1="34" x2="25" y2="18" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="4" stroke-linecap="round"/>
-                <line x1="34" y1="34" x2="34" y2="12" stroke="#4DA8DA" stroke-width="4" stroke-linecap="round"/>
-                <path d="M34 12 C 42 12 44 18 44 22 C 44 22 39 20 34 22 Z" fill="#4DA8DA"/>
-            </svg>
-            <div>
-                <h1 style="margin: 0; padding: 0; font-size: 2.2rem; line-height: 1.1; font-weight: 700;">Pax</h1>
-                <p style="margin: 0; padding: 0; color: #A0A0A0; font-size: 0.95rem; font-style: italic;">Fundamental Analysis & Corporate Valuation System</p>
-            </div>
+        <div style="margin-bottom: 20px;">
+            <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">PAX</h1>
+            <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
         </div>
-        <hr style="margin-top: 0px; margin-bottom: 25px; border-color: #333;">
     """, unsafe_allow_html=True)
 
 # ==========================================
@@ -267,7 +321,6 @@ with tab_watchlist:
                     with st.spinner(f"Searching database for '{nt}'..."):
                         real_ticker, real_name = search_company(nt)
                         price = get_current_price(real_ticker)
-                        
                         new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
                         df_watchlist.to_csv(DB_FILE, index=False)
@@ -378,12 +431,12 @@ with tab_profile:
                             annotation_position="bottom right", annotation_font_color="#E04F5F", annotation_font_size=12
                         )
                 except: pass
-                fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False)
+                fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig, use_container_width=True)
                 
         except: st.error("Error fetching chart data.")
         
-        st.markdown("---")
+        st.markdown("<hr>", unsafe_allow_html=True)
         st.subheader(f"📰 Recent News for {selected_ticker}")
         news_data = fetch_robust_news(selected_ticker)
         
@@ -416,7 +469,7 @@ with tab_ratios:
                         tooltip_text = RATIO_EXPLANATIONS.get(name, "Financial Metric")
                         with cols[i % 5]: st.metric(label=name, value=val, help=tooltip_text)
                         if (i + 1) % 5 == 0: st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("---")
+                    st.markdown("<hr>", unsafe_allow_html=True)
                 
                 st.subheader("Fundamental Trends Visualization")
                 year_cols = [c for c in df.columns if re.search(r'(20\d{2})', str(c))]
@@ -440,10 +493,10 @@ with tab_ratios:
                                     y_values.append(num); x_years.append(str(yc))
                                 except: pass
                             if y_values:
-                                fig_bar = go.Figure(data=[go.Bar(x=x_years, y=y_values, marker_color="#4DA8DA", textposition="auto")])
+                                fig_bar = go.Figure(data=[go.Bar(x=x_years, y=y_values, marker_color="#58a6ff", textposition="auto")])
                                 fig_bar.update_layout(title=f"{selected_metric} Trend", height=400, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                                 st.plotly_chart(fig_bar, use_container_width=True)
-                st.markdown("---")
+                st.markdown("<hr>", unsafe_allow_html=True)
                 with st.expander("View Full Raw Data", expanded=not bool(key_metrics)): st.dataframe(clean_excel_data(df), use_container_width=True, height=(len(df)*35)+40)
             else: st.error("Sheet 'Ratios' not found.")
         else: st.info("No file attached for this company.")
@@ -486,7 +539,7 @@ with tab_val_models:
                                 df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = avg_val
                                 df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], avg_val)
                                 df_watchlist.to_csv(DB_FILE, index=False); st.success(f"Watchlist updated!")
-                            st.markdown("---")
+                            st.markdown("<hr>", unsafe_allow_html=True)
                     else: st.info("Could not extract Relative Valuation data.")
                 else:
                     found_values = find_intrinsic_values(df)
@@ -505,7 +558,7 @@ with tab_val_models:
                                 df_watchlist.to_csv(DB_FILE, index=False); st.success(f"Watchlist updated!")
                             st.markdown("<br>", unsafe_allow_html=True)
                     else: st.info("Could not auto-detect final values in this sheet.")
-                st.markdown("---")
+                st.markdown("<hr>", unsafe_allow_html=True)
                 with st.expander("View Raw Calculation Data (Full Spreadsheet)"): st.dataframe(clean_excel_data(df), use_container_width=True, height=500)
             else: st.warning("No Valuation models found in this file.")
         else: st.info("No file attached.")
@@ -540,7 +593,7 @@ with tab_compare:
         else: st.info("Select at least one company to see the comparison.")
     else: st.info("Your watchlist is empty. Add companies first.")
 
-# --- PAGE 6: NOTES (FIXED STATE BUG) ---
+# --- PAGE 6: NOTES ---
 with tab_notes:
     render_header()
     if selected_ticker:
@@ -552,7 +605,6 @@ with tab_notes:
         if os.path.exists(note_path):
             with open(note_path, "r", encoding="utf-8") as f: existing_note = f.read()
             
-        # The key dynamically changes with the ticker, forcing the text area to refresh!
         new_note = st.text_area(
             "Editor (Markdown supported)", 
             value=existing_note, 
