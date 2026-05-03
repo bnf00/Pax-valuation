@@ -19,59 +19,65 @@ st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     .block-container { padding-top: 3rem !important; max-width: 95% !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 120px; /* Отступ чтобы вкладки не наезжали на тикер */ }
+    
+    /* Стилизация меню бара (Tabs) */
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 130px; /* Отступ справа, чтобы тикер не перекрывал вкладки */ }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
     .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
+    
+    /* Оформление карточек */
     div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; }
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
     hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
     .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
+    
+    /* Стилизация навигации в сайдбаре */
     div[role="radiogroup"] > label { padding-bottom: 10px; }
     
-    /* ---------------------------------------------------
-       МАГИЯ CSS: СТИЛИЗАЦИЯ ВЫБОРА КОМПАНИИ ПОД ВКЛАДКУ
-       --------------------------------------------------- */
+    /* =========================================================
+       МАГИЯ: Выбор компании на одной линии с Меню Баром
+       ========================================================= */
     #active-company-anchor { display: none; }
     
-    /* Прикрепляем к правому краю, на уровень вкладок */
+    /* 1. Выравниваем по правому краю ровно на уровне вкладок */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div {
         position: absolute;
-        right: 0px;
-        margin-top: 5px; 
+        right: 15px;
+        margin-top: 10px; /* Эта цифра опускает селектор ровно на линию вкладок */
         width: 110px;
-        z-index: 100;
-        background-color: #0d1117; /* Прячет скролл вкладок на телефоне */
+        z-index: 999;
     }
     
-    /* Убираем рамки и фон */
-    div:has(#active-company-anchor) + div div[data-baseweb="select"] > div {
+    /* 2. Убираем фон и рамки, делаем прозрачным как вкладки */
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] > div {
         background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
         cursor: pointer;
-        padding-right: 0 !important;
     }
     
-    /* Делаем шрифт точь-в-точь как у вкладок */
-    div:has(#active-company-anchor) + div div[data-baseweb="select"] {
+    /* 3. Копируем шрифт меню бара (серый, 15px, medium) */
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] span {
         color: #8b949e !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         font-size: 15px !important;
     }
     
-    /* Белый цвет при наведении (hover) */
-    div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover {
-        color: #ffffff !important;
+    /* 4. Цвет иконки-стрелочки */
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] svg {
+        fill: #8b949e !important;
     }
     
-    /* Цвет стрелочки */
-    div:has(#active-company-anchor) + div div[data-baseweb="select"] svg {
-        fill: currentColor !important;
+    /* 5. Белый цвет при наведении (эффект ховера) */
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover span,
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -273,9 +279,6 @@ else:
 st.sidebar.markdown("### 🧭 Navigation")
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio"], label_visibility="collapsed")
 
-# ==========================================
-# MAIN INTERFACE HEADER FUNCTION
-# ==========================================
 def render_header():
     st.markdown("""
         <div style="margin-bottom: 25px;">
@@ -283,6 +286,7 @@ def render_header():
             <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
         </div>
     """, unsafe_allow_html=True)
+
 
 # ==========================================
 # РОУТИНГ ПРИЛОЖЕНИЯ
@@ -292,17 +296,17 @@ if app_mode == "Terminal (Analysis)":
     
     render_header()
     
-    # Секретный якорь для CSS, который подтянет следующий выпадающий список вправо
+    # Невидимый якорь, к которому привяжется селектор
     st.markdown('<div id="active-company-anchor"></div>', unsafe_allow_html=True)
     
-    # Тот самый выбор компании (без надписи, выглядит как вкладка)
+    # Селектор без надписи "Active Company" (label_visibility="collapsed")
     selected_ticker = st.selectbox(
         "Active Company", 
         df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], 
         label_visibility="collapsed"
     )
     
-    # Вкладки терминала
+    # Вкладки терминала (селектор будет примагничен вправо на их уровень)
     tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
         "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
     ])
@@ -606,7 +610,6 @@ elif app_mode == "My Portfolio":
     portfolio_df = df_watchlist[df_watchlist['In Portfolio'] == True].copy()
     
     if not portfolio_df.empty:
-        # Подготавливаем данные для расчетов
         display_port = portfolio_df[['Stock', 'Company name', 'Shares', 'Avg Cost']].copy()
         display_port['Market price'] = portfolio_df['Market price'].apply(safe_float)
         display_port['Total Value'] = display_port['Shares'] * display_port['Market price']
@@ -614,13 +617,11 @@ elif app_mode == "My Portfolio":
         display_port['P&L ($)'] = display_port['Total Value'] - display_port['Total Cost']
         display_port['P&L (%)'] = display_port.apply(lambda row: (row['P&L ($)'] / row['Total Cost'] * 100) if row['Total Cost'] > 0 else 0.0, axis=1)
         
-        # Считаем итоги
         total_value = display_port['Total Value'].sum()
         total_cost = display_port['Total Cost'].sum()
         total_pnl = total_value - total_cost
         total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
         
-        # Выводим 3 главные метрики сверху
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Value", f"${total_value:,.2f}")
         m2.metric("Total Cost Basis", f"${total_cost:,.2f}")
@@ -629,7 +630,6 @@ elif app_mode == "My Portfolio":
         st.markdown("<hr>", unsafe_allow_html=True)
         st.write("📝 **Edit your positions below:** (Update 'Shares' and 'Avg Cost')")
         
-        # Таблица для редактирования
         edit_df = display_port[['Stock', 'Company name', 'Market price', 'Shares', 'Avg Cost', 'Total Value', 'P&L ($)', 'P&L (%)']]
         
         edited_port = st.data_editor(
@@ -647,7 +647,6 @@ elif app_mode == "My Portfolio":
             }
         )
         
-        # Сохранение изменений
         if not edited_port[['Shares', 'Avg Cost']].equals(edit_df[['Shares', 'Avg Cost']]):
             for index, row in edited_port.iterrows():
                 stock = row['Stock']
