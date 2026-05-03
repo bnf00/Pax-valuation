@@ -80,7 +80,6 @@ def clean_excel_data(df):
         except: return str(x)
     return df.map(format_cell) if hasattr(df, 'map') else df.applymap(format_cell)
 
-# НОВАЯ ФУНКЦИЯ ДЛЯ НОВОСТЕЙ (Пуленепробиваемая)
 def fetch_robust_news(ticker):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
     articles = []
@@ -236,18 +235,31 @@ tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes =
 with tab_watchlist:
     render_header()
     col_add, col_upload, col_del = st.columns(3)
+    
     with col_add:
         with st.expander("➕ Add New Company"):
+            # --- ИЗМЕНЕНО: Поле Name удалено, добавлен автопоиск ---
             with st.form("add_form", clear_on_submit=True):
-                nt = st.text_input("Ticker")
-                nn = st.text_input("Name")
+                nt = st.text_input("Ticker (e.g., AAPL, GOOGL)")
                 ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
+                
                 if st.form_submit_button("Add") and nt:
-                    price = get_current_price(nt.upper())
-                    new_row = pd.DataFrame([{"Stock": nt.upper(), "Company name": nn, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
-                    df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
-                    df_watchlist.to_csv(DB_FILE, index=False)
-                    st.rerun()
+                    ticker_upper = nt.upper().strip()
+                    with st.spinner(f"Fetching data for {ticker_upper}..."):
+                        price = get_current_price(ticker_upper)
+                        
+                        # Пытаемся автоматически найти имя компании
+                        nn = ticker_upper
+                        try:
+                            info = yf.Ticker(ticker_upper).info
+                            nn = info.get('shortName', info.get('longName', ticker_upper))
+                        except Exception:
+                            pass # Если ошибка, оставляем просто тикер
+                            
+                        new_row = pd.DataFrame([{"Stock": ticker_upper, "Company name": nn, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
+                        df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
+                        df_watchlist.to_csv(DB_FILE, index=False)
+                        st.rerun()
 
     with col_upload:
         with st.expander("📂 Upload Excel Analysis"):
@@ -359,7 +371,6 @@ with tab_profile:
                 
         except: st.error("Error fetching chart data.")
         
-        # --- БРОНЕБОЙНАЯ ЛЕНТА НОВОСТЕЙ ---
         st.markdown("---")
         st.subheader(f"📰 Recent News for {selected_ticker}")
         news_data = fetch_robust_news(selected_ticker)
