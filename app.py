@@ -31,8 +31,6 @@ st.markdown("""
     hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
     .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
-    
-    /* Стилизация радио-кнопок в сайдбаре для навигации */
     div[role="radiogroup"] > label { padding-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
@@ -228,42 +226,50 @@ if os.path.exists(DB_FILE):
 else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
-# ==========================================
-# SIDEBAR (ЧИСТЫЙ + НАВИГАЦИЯ)
-# ==========================================
-selected_ticker = st.sidebar.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
-st.sidebar.markdown("---")
 
-# Главная навигация приложения
+# ==========================================
+# САЙДБАР (ТЕПЕРЬ ИСКЛЮЧИТЕЛЬНО ДЛЯ НАВИГАЦИИ)
+# ==========================================
 st.sidebar.markdown("### 🧭 Navigation")
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio"], label_visibility="collapsed")
 
+
 # ==========================================
-# MAIN INTERFACE
+# MAIN INTERFACE HEADER FUNCTION
 # ==========================================
 def render_header():
     st.markdown("""
-        <div style="margin-bottom: 20px;">
+        <div style="margin-bottom: 10px;">
             <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">PAX</h1>
             <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
         </div>
     """, unsafe_allow_html=True)
 
 
-# --- ГЛОБАЛЬНЫЙ РОУТИНГ (ПЕРЕКЛЮЧЕНИЕ ЭКРАНОВ) ---
+# ==========================================
+# РОУТИНГ ПРИЛОЖЕНИЯ (ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ)
+# ==========================================
 
 if app_mode == "Terminal (Analysis)":
     
-    # Вкладки терминала (без Портфеля)
+    # --- ИЗМЕНЕНИЕ: Заголовок и Выбор компании выстроены в один ряд ---
+    col_head, col_select = st.columns([3, 1])
+    with col_head:
+        render_header()
+    with col_select:
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True) # Отступ для выравнивания
+        selected_ticker = st.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Вкладки терминала
     tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
         "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
     ])
 
     # --- PAGE 1: WATCHLIST ---
     with tab_watchlist:
-        render_header()
         col_add, col_upload, col_del = st.columns(3)
-        
         with col_add:
             with st.expander("➕ Add New Company"):
                 with st.form("add_form", clear_on_submit=True):
@@ -358,7 +364,6 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 2: PROFILE ---
     with tab_profile:
-        render_header()
         if selected_ticker:
             st.subheader(f"Market Chart: {selected_ticker}")
             col_tf, col_int, _ = st.columns([1, 1, 2])
@@ -391,11 +396,10 @@ if app_mode == "Terminal (Analysis)":
                     st.caption(f"Yahoo Finance RSS • {article['date']}")
                     st.markdown("<br>", unsafe_allow_html=True)
             else: st.info("No recent news found for this ticker.")
-        else: st.warning("Select a company in the sidebar.")
+        else: st.warning("Your watchlist is empty.")
 
     # --- PAGE 3: RATIOS ---
     with tab_ratios:
-        render_header()
         if selected_ticker:
             st.subheader(f"Financial Ratios: {selected_ticker}")
             path = os.path.join(FILES_DIR, f"{selected_ticker}.xlsx")
@@ -446,7 +450,6 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 4: VALUATION MODELS ---
     with tab_val_models:
-        render_header()
         if selected_ticker:
             st.subheader(f"Valuation Overview: {selected_ticker}")
             path = os.path.join(FILES_DIR, f"{selected_ticker}.xlsx")
@@ -506,7 +509,6 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 5: COMPARE ---
     with tab_compare:
-        render_header()
         st.subheader("Peer Comparison Dashboard")
         if not df_watchlist.empty:
             all_tickers = df_watchlist['Stock'].tolist()
@@ -536,7 +538,6 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 6: NOTES ---
     with tab_notes:
-        render_header()
         if selected_ticker:
             st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
             st.write(f"Document your fundamental analysis, key risks, and buying rationale for **{selected_ticker}** below.")
@@ -551,10 +552,12 @@ if app_mode == "Terminal (Analysis)":
                 with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
                 st.success("Investment notes saved securely!")
         else:
-            st.warning("Select a company in the sidebar to start writing notes.")
+            st.warning("Your watchlist is empty.")
 
 
-# --- ГЛОБАЛЬНЫЙ РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ ---
+# ==========================================
+# РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
+# ==========================================
 elif app_mode == "My Portfolio":
     render_header()
     st.subheader("💼 My Portfolio Dashboard")
