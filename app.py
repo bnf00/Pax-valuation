@@ -8,13 +8,14 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import json
+import base64
 
 # ==========================================
 # 1. PAGE CONFIG & PREMIUM CSS DESIGN
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
-# Persistence Logic: Initialize Session State so data isn't reset on page switch
+# Persistence Logic: Initialize Session State
 if 'v_state' not in st.session_state:
     st.session_state.v_state = {
         'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
@@ -25,36 +26,85 @@ if 'v_state' not in st.session_state:
         'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
     }
 
-# Подключаем новые премиальные шрифты (Inter для текста, JetBrains Mono для цифр)
+# ==========================================
+# BACKGROUND IMAGE INJECTION
+# ==========================================
+def add_bg_from_local():
+    bg_file = "bg.jpg" if os.path.exists("bg.jpg") else ("bg.png" if os.path.exists("bg.png") else None)
+    if bg_file:
+        with open(bg_file, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+        st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: url(data:image/{"jpg" if "jpg" in bg_file else "png"};base64,{encoded_string});
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        /* Делаем боковое меню полупрозрачным, чтобы фон был виден */
+        [data-testid="stSidebar"] {{
+            background-color: rgba(10, 8, 5, 0.7) !important;
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(212, 175, 55, 0.1);
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("Background image not found. Please save it as 'bg.jpg' or 'bg.png' in the same folder as app.py.")
+
+add_bg_from_local()
+
+# Основные стили (Адаптированы под янтарно-золотую тему и матовое стекло)
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
-    .stApp { background-color: #0d1117; color: #c9d1d9; font-family: 'Inter', sans-serif; }
+    .stApp { color: #e0d8c8; font-family: 'Inter', sans-serif; }
     .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
-    .nav-header { text-align: left; border-bottom: 1px solid #30363d; padding-bottom: 8px; margin-bottom: 20px; }
+    
+    .nav-header { text-align: left; border-bottom: 1px solid rgba(212, 175, 55, 0.3); padding-bottom: 8px; margin-bottom: 20px; }
     .nav-header h3 { margin: 0; padding: 0; color: #ffffff; font-size: 1.2rem; font-weight: 600; font-family: 'Inter', sans-serif; letter-spacing: 0.5px; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; }
+    
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.2); padding-right: 180px !important; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
-    .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
-    .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
-    .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
+    .stTabs [data-baseweb="tab"] p { color: #a39b8a !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
+    .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #d4af37 !important; }
+    .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; text-shadow: 0 0 10px rgba(212, 175, 55, 0.3); }
     div[data-baseweb="tab-highlight"] { display: none !important; }
-    div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-    div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; }
-    hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
-    .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
-    div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
+    
+    /* GLASSMORPHISM для метрик */
+    div[data-testid="metric-container"] { 
+        background-color: rgba(15, 12, 8, 0.65); 
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(212, 175, 55, 0.15); 
+        padding: 15px 20px; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+    }
+    div[data-testid="metric-container"] label { color: #c4bcae !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; text-shadow: 0 0 15px rgba(212, 175, 55, 0.2); }
+    
+    hr { border-color: rgba(212, 175, 55, 0.2) !important; margin-top: 2rem; margin-bottom: 2rem; }
+    
+    .streamlit-expanderHeader { background-color: transparent !important; color: #d4af37 !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
+    div[data-testid="stExpanderDetails"] { border-left: 2px solid rgba(212, 175, 55, 0.4); padding-left: 15px; }
     div[role="radiogroup"] > label { padding-bottom: 10px; font-family: 'Inter', sans-serif; }
+    
     #active-company-anchor { display: none; }
     div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
     div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] { position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #8b949e !important; }
+    
+    /* Стилизация выпадающих списков под темное стекло */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: rgba(15, 12, 8, 0.5) !important; border: 1px solid rgba(212, 175, 55, 0.2) !important; backdrop-filter: blur(5px); cursor: pointer !important; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #e0d8c8 !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #d4af37 !important; }
     div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
-    .guide-box { background-color: #1c2128; border-left: 4px solid #58a6ff; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; }
-    .guide-box h4 { color: #58a6ff; margin-top: 0; }
+    
+    /* Таблицы - убираем белый фон */
+    div[data-testid="stDataFrame"] { background-color: transparent !important; }
+    
+    .guide-box { background-color: rgba(15, 12, 8, 0.7); backdrop-filter: blur(10px); border-left: 4px solid #d4af37; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .guide-box h4 { color: #d4af37; margin-top: 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -240,11 +290,9 @@ DB_FILE = "watchlist.csv"
 
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
-    
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
         if col in df_watchlist.columns:
             df_watchlist[col] = df_watchlist[col].astype('object')
-            
     if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
     if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
     if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
@@ -268,15 +316,15 @@ st.sidebar.markdown("""
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
-    # ДИЗАЙН: Новая эмблема Pax и чистая типографика
+    # ДИЗАЙН ЛОГОТИПА: Теплый янтарный цвет вместо синего
     st.markdown("""
         <div style="display: flex; align-items: center; margin-bottom: 30px;">
-            <div style="background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%); width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px; box-shadow: 0 4px 15px rgba(88, 166, 255, 0.25);">
-                <span style="color: white; font-size: 24px; font-weight: 800; font-family: 'Inter', sans-serif;">P</span>
+            <div style="background: linear-gradient(135deg, #f5c518 0%, #aa8c2c 100%); width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);">
+                <span style="color: #1a160d; font-size: 24px; font-weight: 800; font-family: 'Inter', sans-serif;">P</span>
             </div>
             <div>
-                <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1; font-family: 'Inter', sans-serif;">Pax</h1>
-                <p style="margin: 4px 0 0 0; padding: 0; color: #8b949e; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'Inter', sans-serif;">Fundamental Analysis</p>
+                <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1; font-family: 'Inter', sans-serif; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">Pax</h1>
+                <p style="margin: 4px 0 0 0; padding: 0; color: #d4af37; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'Inter', sans-serif;">Fundamental Analysis</p>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -395,14 +443,15 @@ if app_mode == "Terminal (Analysis)":
                 stock_obj = yf.Ticker(selected_ticker)
                 df_h = stock_obj.history(period=period_map[period_ui], interval=interval_map[interval_ui])
                 if not df_h.empty:
-                    fig = go.Figure(data=[go.Candlestick(x=df_h.index, open=df_h['Open'], high=df_h['High'], low=df_h['Low'], close=df_h['Close'])])
+                    # Изменяем цвет графика на золотой
+                    fig = go.Figure(data=[go.Candlestick(x=df_h.index, open=df_h['Open'], high=df_h['High'], low=df_h['Low'], close=df_h['Close'], increasing_line_color='#d4af37', decreasing_line_color='#8a7122')])
                     iv_raw = df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'].values[0]
                     try:
                         iv_float = float(str(iv_raw).replace('$', '').replace(',', ''))
                         if iv_float > 0:
-                            fig.add_hline(y=iv_float, line_dash="dash", line_color="#E04F5F", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right")
+                            fig.add_hline(y=iv_float, line_dash="dash", line_color="#d4af37", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right", annotation_font_color="#d4af37")
                     except: pass
-                    fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
                     st.plotly_chart(fig, use_container_width=True)
             except: st.error("Error fetching chart data.")
             
@@ -739,9 +788,9 @@ elif app_mode == "Valuation Lab":
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 fig_dcf = go.Figure()
-                fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#238636'))
-                fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#58a6ff'))
-                fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#b38200'))
+                fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#d4af37'))
+                fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), font=dict(color='#e0d8c8'))
                 st.plotly_chart(fig_dcf, use_container_width=True)
                 
                 if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{selected_ticker}"):
