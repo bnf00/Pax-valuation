@@ -9,6 +9,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import json
 import datetime
+import gspread
 
 # ==========================================
 # 1. PAGE CONFIG & PREMIUM CSS DESIGN
@@ -18,17 +19,15 @@ st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_st
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    .block-container { padding-top: 3rem !important; max-width: 95% !important; }
+    .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
     
-    /* Стилизация меню бара (Tabs) */
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; /* Место для селектора справа */ }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
     .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
     
-    /* Оформление карточек */
     div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; }
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
@@ -37,56 +36,20 @@ st.markdown("""
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
     div[role="radiogroup"] > label { padding-bottom: 10px; }
     
-    /* =========================================================
-       ИДЕАЛЬНЫЙ ВЫБОР КОМПАНИИ ВНУТРИ КОНТЕЙНЕРА ВКЛАДОК
-       ========================================================= */
     #active-company-anchor { display: none; }
-    
-    /* 1. Жестко ограничиваем контейнер, чтобы селектор не вылетал за экран */
-    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) {
-        position: relative !important;
-    }
-    
-    /* 2. Ставим селектор в правую часть этого контейнера (на уровне вкладок) */
+    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
     div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] {
-        position: absolute !important;
-        right: 0px !important;
-        top: 2px !important; 
-        width: 170px !important; /* Увеличил ширину, чтобы текст не обрезался ("GO...") */
-        z-index: 999 !important;
+        position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important;
     }
-    
-    /* 3. Делаем прозрачным и убираем рамки */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        cursor: pointer !important;
-    }
-    
-    /* 4. Приравниваем дизайн текста к вкладкам меню бара */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span {
-        color: #8b949e !important;
-        font-weight: 500 !important;
-        font-size: 15px !important;
-        text-align: right;
-    }
-    
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
-        fill: #8b949e !important;
-    }
-    
-    /* 5. Белый цвет при наведении */
-    div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span,
-    div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg {
-        color: #ffffff !important;
-        fill: #ffffff !important;
-    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #8b949e !important; }
+    div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# RATIO EXPLANATIONS
+# RATIO EXPLANATIONS & CORE FUNCTIONS
 # ==========================================
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
@@ -101,10 +64,6 @@ RATIO_EXPLANATIONS = {
     "Interest Earned": "Solvency: Ability to cover interest expenses."
 }
 
-# ==========================================
-# 2. CORE FUNCTIONS & DIRS
-# ==========================================
-DB_FILE = "watchlist.csv"
 FILES_DIR = "analyses"
 NOTES_DIR = "notes" 
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
@@ -264,17 +223,53 @@ def extract_key_ratios(df):
                     except ValueError: results[key] = str(val) if str(val).strip() not in excel_errors else "N/A"
     return results
 
+
 # ==========================================
-# УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (CSV)
+# УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (GOOGLE SHEETS)
 # ==========================================
-if os.path.exists(DB_FILE):
-    df_watchlist = pd.read_csv(DB_FILE)
-    if 'File' in df_watchlist.columns: df_watchlist.drop(columns=['File'], inplace=True)
-    if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
-    if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
-    if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
-else:
-    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+try:
+    if "google_json" in st.secrets:
+        creds_json = st.secrets["google_json"]
+        creds_dict = json.loads(creds_json)
+        gc = gspread.service_account_from_dict(creds_dict)
+        sh = gc.open("Pax_Database")
+        worksheet = sh.sheet1
+        
+        data = worksheet.get_all_records()
+        if data:
+            df_watchlist = pd.DataFrame(data)
+            if 'Shares' in df_watchlist.columns: df_watchlist['Shares'] = pd.to_numeric(df_watchlist['Shares'], errors='coerce').fillna(0.0)
+            if 'Avg Cost' in df_watchlist.columns: df_watchlist['Avg Cost'] = pd.to_numeric(df_watchlist['Avg Cost'], errors='coerce').fillna(0.0)
+            if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower() == 'true'
+        else:
+            df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+            worksheet.update([df_watchlist.columns.values.tolist()], "A1")
+            
+        st.sidebar.success("🟢 Connected to Cloud Database")
+    else:
+        raise Exception("Secret 'google_json' not found")
+        
+except Exception as e:
+    st.sidebar.error(f"🔴 Offline Mode (Cloud error: {e})")
+    if os.path.exists("watchlist.csv"):
+        df_watchlist = pd.read_csv("watchlist.csv")
+    else:
+        df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+
+def save_db(df):
+    try:
+        if "google_json" in st.secrets:
+            df_clean = df.copy()
+            df_clean = df_clean.fillna("") 
+            data_to_save = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
+            worksheet.clear()
+            worksheet.update(data_to_save, "A1")
+        else:
+            df.to_csv("watchlist.csv", index=False)
+    except Exception as e:
+        st.error(f"Database Save Error: {e}")
+        df.to_csv("watchlist.csv", index=False)
+
 
 # ==========================================
 # SIDEBAR (ТОЛЬКО НАВИГАЦИЯ)
@@ -290,7 +285,6 @@ def render_header():
         </div>
     """, unsafe_allow_html=True)
 
-
 # ==========================================
 # РОУТИНГ ПРИЛОЖЕНИЯ
 # ==========================================
@@ -299,23 +293,17 @@ if app_mode == "Terminal (Analysis)":
     
     render_header()
     
-    # ---------------------------------------------------------
-    # МАГИЯ: ЕДИНЫЙ КОНТЕЙНЕР ДЛЯ МЕНЮ БАРА И СЕЛЕКТОРА
-    # ---------------------------------------------------------
     nav_container = st.container()
     
     with nav_container:
-        # Невидимый якорь. CSS поймет, что этот контейнер нужно ограничить рамками.
         st.markdown('<div id="active-company-anchor"></div>', unsafe_allow_html=True)
         
-        # Выбор компании (привяжется вправо внутри этого контейнера)
         selected_ticker = st.selectbox(
             "Active Company", 
             df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], 
             label_visibility="collapsed"
         )
         
-        # Вкладки (заполняют всю левую часть)
         tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
             "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
         ])
@@ -335,7 +323,7 @@ if app_mode == "Terminal (Analysis)":
                             price = get_current_price(real_ticker)
                             new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
                             df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
-                            df_watchlist.to_csv(DB_FILE, index=False)
+                            save_db(df_watchlist)
                             st.rerun()
 
         with col_upload:
@@ -355,7 +343,7 @@ if app_mode == "Terminal (Analysis)":
                         ticker_to_delete = st.selectbox("Select ticker to remove", df_watchlist['Stock'].tolist())
                         if st.form_submit_button("Delete"):
                             df_watchlist = df_watchlist[df_watchlist['Stock'] != ticker_to_delete]
-                            df_watchlist.to_csv(DB_FILE, index=False)
+                            save_db(df_watchlist)
                             file_to_delete = os.path.join(FILES_DIR, f"{ticker_to_delete}.xlsx")
                             if os.path.exists(file_to_delete): os.remove(file_to_delete)
                             st.rerun()
@@ -378,7 +366,7 @@ if app_mode == "Terminal (Analysis)":
                         if isinstance(p, float):
                             df_watchlist.at[i, 'Market price'] = f"${p}"
                             df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
-                    df_watchlist.to_csv(DB_FILE, index=False)
+                    save_db(df_watchlist)
                     st.rerun()
         with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
 
@@ -413,7 +401,7 @@ if app_mode == "Terminal (Analysis)":
         
         if not edited_df.equals(display_df):
             df_watchlist.update(edited_df)
-            df_watchlist.to_csv(DB_FILE, index=False)
+            save_db(df_watchlist)
             st.rerun()
 
     # --- PAGE 2: PROFILE ---
@@ -537,7 +525,8 @@ if app_mode == "Terminal (Analysis)":
                                 if st.button(f"Sync Average ({item['Metric']}): ${avg_val:,.2f}", key=f"sync_{selected_ticker}_{item['Metric']}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = avg_val
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], avg_val)
-                                    df_watchlist.to_csv(DB_FILE, index=False); st.success(f"Watchlist updated!")
+                                    save_db(df_watchlist)
+                                    st.success(f"Watchlist updated!")
                                 st.markdown("<hr>", unsafe_allow_html=True)
                         else: st.info("Could not extract Relative Valuation data.")
                     else:
@@ -553,7 +542,8 @@ if app_mode == "Terminal (Analysis)":
                                 if st.button(f"Sync '{label}' (${val:,.2f}) to Watchlist", key=f"sync_{selected_ticker}_{label}_{val}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = val
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], val)
-                                    df_watchlist.to_csv(DB_FILE, index=False); st.success(f"Watchlist updated!")
+                                    save_db(df_watchlist)
+                                    st.success(f"Watchlist updated!")
                                 st.markdown("<br>", unsafe_allow_html=True)
                         else: st.info("Could not auto-detect final values in this sheet.")
                     st.markdown("<hr>", unsafe_allow_html=True)
@@ -608,7 +598,6 @@ if app_mode == "Terminal (Analysis)":
         else:
             st.warning("Your watchlist is empty.")
 
-
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
 # ==========================================
@@ -661,7 +650,7 @@ elif app_mode == "My Portfolio":
                 stock = row['Stock']
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Shares'] = row['Shares']
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Avg Cost'] = row['Avg Cost']
-            df_watchlist.to_csv(DB_FILE, index=False)
+            save_db(df_watchlist)
             st.rerun()
             
     else:
