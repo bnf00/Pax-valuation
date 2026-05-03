@@ -252,10 +252,21 @@ try:
             
         st.sidebar.success("🟢 Connected to Cloud Database")
     else:
-        raise Exception("Secret 'google_json' not found")
-        
+        st.sidebar.error("🔴 Ошибка: Секретный ключ 'google_json' не найден в настройках Secrets!")
+        df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+
+# ======= ДИАГНОСТИКА ОШИБОК GOOGLE =======
+except gspread.exceptions.SpreadsheetNotFound:
+    st.sidebar.error("🔴 Ошибка доступа: Бот не видит таблицу. Вы точно добавили его email как 'Редактора' в Google Таблицу?")
+    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+except json.decoder.JSONDecodeError:
+    st.sidebar.error("🔴 Ошибка формата: Ваш JSON-ключ сломан. Проверьте, нет ли лишних кавычек в Secrets.")
+    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+except gspread.exceptions.APIError as api_err:
+    st.sidebar.error(f"🔴 Ошибка Google Cloud API (Возможно, не включен Google Drive API): {api_err}")
+    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 except Exception as e:
-    st.sidebar.error(f"🔴 Offline Mode (Check Secrets or Access)")
+    st.sidebar.error(f"🔴 Системная ошибка: {e}")
     if os.path.exists("watchlist.csv"):
         df_watchlist = pd.read_csv("watchlist.csv")
     else:
@@ -270,7 +281,6 @@ def save_db(df):
             
             worksheet.clear()
             
-            # Бронебойная запись: работает на любой версии gspread
             try:
                 worksheet.update(values=data_to_save, range_name="A1")
             except TypeError:
@@ -278,7 +288,7 @@ def save_db(df):
         else:
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
-        st.error(f"⚠️ Ошибка при сохранении в облако: {e}")
+        st.error(f"⚠️ Ошибка сохранения: {e}")
         df.to_csv("watchlist.csv", index=False)
 
 
