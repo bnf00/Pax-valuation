@@ -664,4 +664,4 @@ elif app_mode == "DCF Lab":
                 save_db(df_watchlist)
                 st.success(f"Successfully updated intrinsic value for {selected_ticker}!")
     else:
-        st.warning("Your watchlist is empty. Add a company in the Terminal first.")o a company to add it here.")
+        st.warning("Your watchlist is empty. Add a company in the Terminal first.")
