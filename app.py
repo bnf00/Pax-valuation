@@ -226,15 +226,18 @@ def extract_key_ratios(df):
 # ==========================================
 # УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (GOOGLE SHEETS)
 # ==========================================
+worksheet = None # Глобальная переменная-предохранитель
+
 try:
     if "google_json" in st.secrets:
         creds_json = st.secrets["google_json"]
         creds_dict = json.loads(creds_json)
         gc = gspread.service_account_from_dict(creds_dict)
+        
+        # Если боту не дали доступ к таблице, тут будет ошибка SpreadsheetNotFound
         sh = gc.open("Pax_Database")
         worksheet = sh.sheet1
         
-        # Получаем данные без ошибок
         data = worksheet.get_all_values() 
         if data and len(data) > 0:
             headers = data[0]
@@ -243,12 +246,10 @@ try:
             else:
                 df_watchlist = pd.DataFrame(columns=headers)
             
-            # Приводим типы
             if 'Shares' in df_watchlist.columns: df_watchlist['Shares'] = pd.to_numeric(df_watchlist['Shares'], errors='coerce').fillna(0.0)
             if 'Avg Cost' in df_watchlist.columns: df_watchlist['Avg Cost'] = pd.to_numeric(df_watchlist['Avg Cost'], errors='coerce').fillna(0.0)
             if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower().isin(['true', '1', 't', 'yes', 'y'])
         else:
-            # ЕСЛИ ТАБЛИЦА ПУСТАЯ, ПРОСТО СОЗДАЕМ ЛОКАЛЬНЫЙ ФРЕЙМ БЕЗ ЗАПИСИ (убирает ошибку 200)
             df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
             
         st.sidebar.success("🟢 Connected to Cloud Database")
@@ -256,27 +257,27 @@ try:
         raise Exception("Secret 'google_json' not found")
         
 except Exception as e:
-    # Заглушка для ложной ошибки Response 200 при загрузке
     if "200" in str(e):
         st.sidebar.success("🟢 Connected to Cloud Database")
         df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
     else:
-        st.sidebar.error(f"🔴 Offline Mode (Cloud error: {e})")
+        st.sidebar.error(f"🔴 Offline Mode (No Google Access)")
         if os.path.exists("watchlist.csv"):
             df_watchlist = pd.read_csv("watchlist.csv")
         else:
             df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
 def save_db(df):
+    global worksheet
     try:
-        if "google_json" in st.secrets:
+        # Теперь сохраняем в облако только если worksheet реально существует
+        if "google_json" in st.secrets and worksheet is not None:
             df_clean = df.copy()
             df_clean = df_clean.fillna("") 
             data_to_save = [df_clean.columns.tolist()] + df_clean.values.tolist()
             
             worksheet.clear()
             
-            # Универсальный метод записи (работает на всех версиях)
             try:
                 v = int(gspread.__version__.split('.')[0])
             except:
@@ -289,8 +290,9 @@ def save_db(df):
                     worksheet.update("A1", data_to_save)
             except Exception as write_err:
                 if "200" not in str(write_err):
-                    raise write_err # Поднимаем ошибку, только если это НЕ ложный Response 200
+                    raise write_err 
         else:
+            # Безопасное сохранение локально, если нет связи
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
         if "200" not in str(e):
