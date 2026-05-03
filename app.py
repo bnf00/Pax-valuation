@@ -5,7 +5,10 @@ import yfinance as yf
 import plotly.graph_objects as go
 import re
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
+import json
+import datetime
 
 # ==========================================
 # 1. PAGE CONFIG & CSS
@@ -52,6 +55,28 @@ FILES_DIR = "analyses"
 NOTES_DIR = "notes" 
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
+
+# --- НОВАЯ ФУНКЦИЯ: Умный поиск тикера по названию ---
+def search_company(query):
+    query = str(query).strip()
+    if not query: return "", ""
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            quotes = data.get('quotes', [])
+            # Ищем первую попавшуюся акцию (EQUITY)
+            for q in quotes:
+                if q.get('quoteType') in ['EQUITY', 'ETF']:
+                    return q.get('symbol', query.upper()), q.get('shortname', query)
+            # Если акций нет, берем первый попавшийся результат
+            if quotes:
+                return quotes[0].get('symbol', query.upper()), quotes[0].get('shortname', query)
+    except Exception:
+        pass
+    # Если интернет отвалился или ничего не найдено, возвращаем то, что ввел пользователь
+    return query.upper(), query
 
 def get_current_price(ticker):
     try:
@@ -238,25 +263,18 @@ with tab_watchlist:
     
     with col_add:
         with st.expander("➕ Add New Company"):
-            # --- ИЗМЕНЕНО: Поле Name удалено, добавлен автопоиск ---
             with st.form("add_form", clear_on_submit=True):
-                nt = st.text_input("Ticker (e.g., AAPL, GOOGL)")
+                # Поле изменено для ввода либо тикера, либо названия
+                nt = st.text_input("Company Name or Ticker (e.g., Tesla or TSLA)")
                 ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
                 
                 if st.form_submit_button("Add") and nt:
-                    ticker_upper = nt.upper().strip()
-                    with st.spinner(f"Fetching data for {ticker_upper}..."):
-                        price = get_current_price(ticker_upper)
+                    with st.spinner(f"Searching database for '{nt}'..."):
+                        # Ищем реальный тикер и название
+                        real_ticker, real_name = search_company(nt)
+                        price = get_current_price(real_ticker)
                         
-                        # Пытаемся автоматически найти имя компании
-                        nn = ticker_upper
-                        try:
-                            info = yf.Ticker(ticker_upper).info
-                            nn = info.get('shortName', info.get('longName', ticker_upper))
-                        except Exception:
-                            pass # Если ошибка, оставляем просто тикер
-                            
-                        new_row = pd.DataFrame([{"Stock": ticker_upper, "Company name": nn, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
+                        new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
                         df_watchlist.to_csv(DB_FILE, index=False)
                         st.rerun()
