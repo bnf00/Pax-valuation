@@ -14,7 +14,7 @@ import json
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
-# Инициализация хранилища памяти (Session State)
+# Persistence Logic: Initialize Session State so data isn't reset on page switch
 if 'v_state' not in st.session_state:
     st.session_state.v_state = {
         'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
@@ -78,13 +78,18 @@ st.markdown("""
 # ==========================================
 # RATIO EXPLANATIONS & CORE FUNCTIONS
 # ==========================================
+# ВОССТАНОВЛЕНЫ ВСЕ 10 КОЭФФИЦИЕНТОВ
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
     "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory.",
     "A/R Turnover": "Efficiency: Shows how effectively a company collects its debt.",
+    "Inventory Turnover": "Efficiency: Shows how many times a company sold and replaced inventory.",
     "Profit Margin": "Profitability: The percentage of revenue remaining as profit.",
+    "Asset Turnover": "Efficiency: Measures the value of sales relative to assets.",
     "ROA": "Profitability (Return on Assets): Profitable relative to total assets.",
     "ROE": "Profitability (Return on Equity): Profitable relative to shareholders equity.",
+    "Debt to Assets": "Solvency: Proportion of assets financed by debt.",
+    "Interest Earned": "Solvency: Ability to cover interest expenses."
 }
 
 FILES_DIR = "analyses"
@@ -215,10 +220,13 @@ def extract_relative_valuation_data(df):
     return results
 
 def extract_key_ratios(df):
+    # ВОССТАНОВЛЕНЫ ВСЕ 10 КОЭФФИЦИЕНТОВ
     target_ratios = {
         "Current Ratio": ["current ratio"], "ACID-Test Ratio": ["acid-test", "quick ratio"],
-        "A/R Turnover": ["receivable turnover"], "Profit Margin": ["profit margin"],
-        "ROA": ["return on assets", "roa"], "ROE": ["return on ordinary shareholders", "roe"]
+        "A/R Turnover": ["receivable turnover"], "Inventory Turnover": ["inventory turnover"],
+        "Profit Margin": ["profit margin"], "Asset Turnover": ["asset turnover"],
+        "ROA": ["return on assets", "roa"], "ROE": ["return on ordinary shareholders", "roe"],
+        "Debt to Assets": ["debt to total assets"], "Interest Earned": ["times interest earned"]
     }
     latest_year_col = None; max_year = -1
     for col in df.columns:
@@ -245,12 +253,13 @@ def extract_key_ratios(df):
     return results
 
 # ==========================================
-# DATABASE MANAGEMENT (LOCAL CSV)
+# ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ (БЕЗ GOOGLE)
 # ==========================================
 DB_FILE = "watchlist.csv"
 
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
+    
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
         if col in df_watchlist.columns:
             df_watchlist[col] = df_watchlist[col].astype('object')
@@ -516,7 +525,20 @@ if app_mode == "Terminal (Analysis)":
                 with st.spinner('Compiling fundamental data...'):
                     for t in tickers_to_compare:
                         row = df_watchlist[df_watchlist['Stock'] == t]
-                        comp_info = {"Market Price": str(row['Market price'].values[0]) if not row.empty else "N/A", "Intrinsic Value": str(row['Intrinsic value'].values[0]) if not row.empty else "N/A", "Potential": str(row['Potential'].values[0]) if not row.empty else "N/A"}
+                        
+                        # ИСПРАВЛЕНИЕ: Форматируем Intrinsic Value, чтобы было красиво (например, $109.42)
+                        iv_val = row['Intrinsic value'].values[0] if not row.empty else "N/A"
+                        try:
+                            formatted_iv = f"${float(iv_val):,.2f}" if pd.notna(iv_val) and iv_val != "" else "N/A"
+                        except:
+                            formatted_iv = "N/A"
+                            
+                        comp_info = {
+                            "Market Price": str(row['Market price'].values[0]) if not row.empty else "N/A", 
+                            "Intrinsic Value": formatted_iv, 
+                            "Potential": str(row['Potential'].values[0]) if not row.empty else "N/A"
+                        }
+                        
                         path = os.path.join(FILES_DIR, f"{t}.xlsx")
                         if os.path.exists(path):
                             try:
