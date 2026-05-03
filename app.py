@@ -8,7 +8,6 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import json
-import datetime
 import gspread
 
 # ==========================================
@@ -235,16 +234,23 @@ try:
         sh = gc.open("Pax_Database")
         worksheet = sh.sheet1
         
-        data = worksheet.get_all_records()
+        # БРОНЕБОЙНЫЙ МЕТОД ЧТЕНИЯ (без ошибок парсинга)
+        data = worksheet.get_all_values() 
         if data:
-            df_watchlist = pd.DataFrame(data)
+            headers = data[0]
+            if len(data) > 1:
+                df_watchlist = pd.DataFrame(data[1:], columns=headers)
+            else:
+                df_watchlist = pd.DataFrame(columns=headers)
+            
+            # Приводим типы данных
             if 'Shares' in df_watchlist.columns: df_watchlist['Shares'] = pd.to_numeric(df_watchlist['Shares'], errors='coerce').fillna(0.0)
             if 'Avg Cost' in df_watchlist.columns: df_watchlist['Avg Cost'] = pd.to_numeric(df_watchlist['Avg Cost'], errors='coerce').fillna(0.0)
-            if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower() == 'true'
+            if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower().isin(['true', '1', 't', 'yes', 'y'])
         else:
+            # Создаем пустую структуру, если таблица пуста
             df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-            # УНИВЕРСАЛЬНОЕ ОБНОВЛЕНИЕ ДЛЯ ЛЮБОЙ ВЕРСИИ GSPREAD
-            worksheet.update(range_name="A1", values=[df_watchlist.columns.values.tolist()])
+            worksheet.append_row(df_watchlist.columns.tolist())
             
         st.sidebar.success("🟢 Connected to Cloud Database")
     else:
@@ -262,10 +268,11 @@ def save_db(df):
         if "google_json" in st.secrets:
             df_clean = df.copy()
             df_clean = df_clean.fillna("") 
-            data_to_save = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
+            data_to_save = [df_clean.columns.tolist()] + df_clean.values.tolist()
+            
+            # БРОНЕБОЙНЫЙ МЕТОД СОХРАНЕНИЯ (обходит баг <Response [200]>)
             worksheet.clear()
-            # УНИВЕРСАЛЬНОЕ ОБНОВЛЕНИЕ ДЛЯ ЛЮБОЙ ВЕРСИИ GSPREAD
-            worksheet.update(range_name="A1", values=data_to_save)
+            worksheet.append_rows(data_to_save) 
         else:
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
@@ -658,3 +665,4 @@ elif app_mode == "My Portfolio":
             
     else:
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
+```</Response>
