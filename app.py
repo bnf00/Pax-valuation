@@ -43,6 +43,9 @@ st.markdown("""
     div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #8b949e !important; }
     div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
+    
+    .guide-box { background-color: #1c2128; border-left: 4px solid #58a6ff; padding: 15px; border-radius: 4px; margin-top: 30px; }
+    .guide-box h4 { color: #58a6ff; margin-top: 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -53,13 +56,9 @@ RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
     "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory.",
     "A/R Turnover": "Efficiency: Shows how effectively a company collects its debt.",
-    "Inventory Turnover": "Efficiency: Shows how many times a company sold and replaced inventory.",
     "Profit Margin": "Profitability: The percentage of revenue remaining as profit.",
-    "Asset Turnover": "Efficiency: Measures the value of sales relative to assets.",
     "ROA": "Profitability (Return on Assets): Profitable relative to total assets.",
     "ROE": "Profitability (Return on Equity): Profitable relative to shareholders equity.",
-    "Debt to Assets": "Solvency: Proportion of assets financed by debt.",
-    "Interest Earned": "Solvency: Ability to cover interest expenses."
 }
 
 FILES_DIR = "analyses"
@@ -192,10 +191,8 @@ def extract_relative_valuation_data(df):
 def extract_key_ratios(df):
     target_ratios = {
         "Current Ratio": ["current ratio"], "ACID-Test Ratio": ["acid-test", "quick ratio"],
-        "A/R Turnover": ["receivable turnover"], "Inventory Turnover": ["inventory turnover"],
-        "Profit Margin": ["profit margin"], "Asset Turnover": ["asset turnover"],
-        "ROA": ["return on assets", "roa"], "ROE": ["return on ordinary shareholders", "roe"],
-        "Debt to Assets": ["debt to total assets"], "Interest Earned": ["times interest earned"]
+        "A/R Turnover": ["receivable turnover"], "Profit Margin": ["profit margin"],
+        "ROA": ["return on assets", "roa"], "ROE": ["return on ordinary shareholders", "roe"]
     }
     latest_year_col = None; max_year = -1
     for col in df.columns:
@@ -241,8 +238,7 @@ def save_db(df):
 # SIDEBAR NAVIGATION
 # ==========================================
 st.sidebar.markdown("### 🧭 Navigation")
-# Added "DCF Lab" as a completely new page in the main navigation
-app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "DCF Lab"], label_visibility="collapsed")
+app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
     st.markdown("""
@@ -271,7 +267,6 @@ if app_mode == "Terminal (Analysis)":
             label_visibility="collapsed"
         )
         
-        # Restored the original Excel Valuation Models tab here
         tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
             "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
         ])
@@ -411,7 +406,7 @@ if app_mode == "Terminal (Analysis)":
                 else: st.error("Sheet 'Ratios' not found.")
             else: st.info("No file attached for this company.")
             
-    # --- PAGE 4: VALUATION MODELS (Restored!) ---
+    # --- PAGE 4: VALUATION MODELS (From Excel) ---
     with tab_val_models:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Valuation Overview: {selected_ticker}")
@@ -578,90 +573,212 @@ elif app_mode == "My Portfolio":
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: РЕЖИМ DCF LAB (NEW PAGE)
+# РОУТИНГ: VALUATION LAB (NEW PAGE)
 # ==========================================
-elif app_mode == "DCF Lab":
+elif app_mode == "Valuation Lab":
     render_header()
-    st.subheader("🧪 Discounted Cash Flow Laboratory")
+    st.subheader("🔬 Valuation Laboratory")
     
     if not df_watchlist.empty:
-        # Create a specific selector for this page
         selected_ticker = st.selectbox("Select Company for Analysis", df_watchlist['Stock'].tolist())
+        st.write(f"Dynamic valuation models for **{selected_ticker}**.")
         
-        st.write(f"Dynamic valuation model for **{selected_ticker}**. Adjust the assumptions below to calculate the intrinsic value.")
+        # Переключатель методов
+        val_method = st.radio("Choose Valuation Method:", 
+                              ["1. Gordon Growth Model (DDM)", 
+                               "2. Multi-Stage Discounted Cash Flow (DCF)", 
+                               "3. Relative Valuation (Multiples)"], 
+                              horizontal=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
         
-        # Split screen for Inputs and Results
-        col_inputs, col_results = st.columns([1, 2], gap="large")
+        current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
+        current_p = safe_float(current_price_str)
         
-        with col_inputs:
-            st.markdown("#### ⚙️ Assumptions")
-            # Base variables
-            fcf_base = st.number_input("Base Free Cash Flow (FCF) $M", value=1000.0, step=100.0, help="Free Cash Flow for Year 0")
-            growth_rate = st.slider("Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=10.0, step=1.0, format="%f%%") / 100
-            terminal_growth = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=2.5, step=0.1, format="%f%%") / 100
-            wacc = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=9.0, step=0.5, format="%f%%") / 100
+        # ------------------------------------------
+        # МЕТОД 1: GORDON GROWTH MODEL (DDM)
+        # ------------------------------------------
+        if val_method.startswith("1"):
+            col_inputs, col_results = st.columns([1, 2], gap="large")
+            with col_inputs:
+                st.markdown("#### ⚙️ DDM Assumptions")
+                div_0 = st.number_input("Current Annual Dividend per Share ($)", value=2.0, step=0.1)
+                g_div = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=3.0, step=0.1, format="%f%%") / 100
+                ke = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=8.0, step=0.5, format="%f%%") / 100
             
-            st.markdown("#### 🏢 Capital Structure")
-            shares_out = st.number_input("Shares Outstanding (Millions)", value=500.0, step=10.0)
-            net_debt = st.number_input("Net Debt $M (Total Debt - Cash)", value=2000.0, step=100.0)
-            
-        with col_results:
-            st.markdown("#### 📊 Projections & Valuation")
-            
-            # DCF Math logic
-            fcfs = []
-            pvs = []
-            years = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
-            
-            for year in range(1, 6):
-                fcf = fcf_base * ((1 + growth_rate) ** year)
-                pv = fcf / ((1 + wacc) ** year)
-                fcfs.append(fcf)
-                pvs.append(pv)
+            with col_results:
+                st.markdown("#### 📊 DDM Valuation")
+                if ke <= g_div:
+                    st.error("Error: Cost of Equity must be strictly greater than the Dividend Growth Rate for the Gordon model to work.")
+                    intrinsic_value = 0.0
+                else:
+                    # Formula: P0 = D0 * (1 + g) / (Ke - g)
+                    intrinsic_value = div_0 * (1 + g_div) / (ke - g_div)
+                    
+                    m1, m2 = st.columns(2)
+                    m1.metric("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):.2f}")
+                    
+                    if current_p > 0:
+                        upside = ((intrinsic_value - current_p) / current_p) * 100
+                        m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+                    else:
+                        m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
                 
-            # Terminal Value Calculation
-            terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth)
-            pv_tv = terminal_value / ((1 + wacc) ** 5)
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0)):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    save_db(df_watchlist)
+                    st.success(f"Watchlist updated!")
             
-            # Final Metrics
-            enterprise_val = sum(pvs) + pv_tv
-            equity_val = enterprise_val - net_debt
-            intrinsic_value = equity_val / shares_out if shares_out > 0 else 0
-            
-            # Displaying Metrics
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Enterprise Value", f"${enterprise_val:,.1f} M")
-            m2.metric("Equity Value", f"${equity_val:,.1f} M")
-            
-            current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
-            current_p = safe_float(current_price_str)
-            
-            if current_p > 0:
-                upside = ((intrinsic_value - current_p) / current_p) * 100
-                m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
-            else:
-                m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Cash Flow Chart
-            fig_dcf = go.Figure()
-            fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#238636'))
-            fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#58a6ff'))
-            
-            fig_dcf.update_layout(
-                title="Cash Flow Projections (Next 5 Years)",
-                barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0),
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_dcf, use_container_width=True)
-            
-            # Sync Button
-            if st.button("💾 Sync Intrinsic Value to Watchlist", type="primary", use_container_width=True):
-                df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
-                save_db(df_watchlist)
-                st.success(f"Successfully updated intrinsic value for {selected_ticker}!")
+            # Информационный блок-шпаргалка
+            st.markdown("""
+                <div class="guide-box">
+                    <h4>💡 Шпаргалка аналитика: Gordon Growth Model (DDM)</h4>
+                    <ul>
+                        <li><b>Когда использовать:</b> Для зрелых компаний, которые стабильно платят дивиденды и имеют четкую дивидендную политику. Предполагается, что дивиденды будут расти постоянным темпом вечно.</li>
+                        <li><b>Идеальные кандидаты:</b> Коммунальные предприятия (Utilities), телекоммуникации (AT&T, Verizon), крупные банки (JPMorgan), устоявшиеся потребительские бренды (Coca-Cola, P&G).</li>
+                        <li><b>Когда НЕ использовать:</b> Для компаний, которые не платят дивиденды (Amazon, Meta) или для быстрорастущих технологических стартапов, которые реинвестируют всю прибыль обратно в бизнес.</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # ------------------------------------------
+        # МЕТОД 2: MULTI-STAGE DCF (FCFF)
+        # ------------------------------------------
+        elif val_method.startswith("2"):
+            col_inputs, col_results = st.columns([1, 2], gap="large")
+            with col_inputs:
+                st.markdown("#### ⚙️ DCF Assumptions")
+                fcf_base = st.number_input("Base Free Cash Flow (FCF) $M", value=1000.0, step=100.0)
+                growth_rate = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=10.0, step=1.0, format="%f%%") / 100
+                terminal_growth = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=2.5, step=0.1, format="%f%%") / 100
+                wacc = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=9.0, step=0.5, format="%f%%") / 100
+                
+                st.markdown("#### 🏢 Capital Structure")
+                shares_out = st.number_input("Shares Outstanding (Millions)", value=500.0, step=10.0)
+                net_debt = st.number_input("Net Debt $M (Total Debt - Cash)", value=2000.0, step=100.0)
+                
+            with col_results:
+                st.markdown("#### 📊 DCF Projections & Valuation")
+                fcfs, pvs = [], []
+                years = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
+                
+                for year in range(1, 6):
+                    fcf = fcf_base * ((1 + growth_rate) ** year)
+                    pv = fcf / ((1 + wacc) ** year)
+                    fcfs.append(fcf); pvs.append(pv)
+                    
+                terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
+                pv_tv = terminal_value / ((1 + wacc) ** 5)
+                
+                enterprise_val = sum(pvs) + pv_tv
+                equity_val = enterprise_val - net_debt
+                intrinsic_value = equity_val / shares_out if shares_out > 0 else 0
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Enterprise Value", f"${enterprise_val:,.1f} M")
+                m2.metric("Equity Value", f"${equity_val:,.1f} M")
+                
+                if current_p > 0:
+                    upside = ((intrinsic_value - current_p) / current_p) * 100
+                    m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+                else:
+                    m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                fig_dcf = go.Figure()
+                fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#238636'))
+                fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#58a6ff'))
+                fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                st.plotly_chart(fig_dcf, use_container_width=True)
+                
+                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    save_db(df_watchlist)
+                    st.success(f"Watchlist updated!")
+                    
+            # Информационный блок-шпаргалка
+            st.markdown("""
+                <div class="guide-box">
+                    <h4>💡 Шпаргалка аналитика: Discounted Cash Flow (DCF)</h4>
+                    <ul>
+                        <li><b>Когда использовать:</b> Золотой стандарт оценки. Используется, когда компания генерирует (или скоро начнет генерировать) стабильный и прогнозируемый свободный денежный поток (Free Cash Flow).</li>
+                        <li><b>Идеальные кандидаты:</b> Технологические гиганты (Apple, Microsoft), производственные компании со стабильным капитальным циклом, крупные ритейлеры (Walmart).</li>
+                        <li><b>Когда НЕ использовать:</b> Для банков и страховых компаний (там лучше использовать модель FCFE или P/B), а также для сверх-рискованных стартапов, чьи денежные потоки невозможно предсказать даже на год вперед.</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # ------------------------------------------
+        # МЕТОД 3: RELATIVE VALUATION
+        # ------------------------------------------
+        elif val_method.startswith("3"):
+            col_inputs, col_results = st.columns([1, 2], gap="large")
+            with col_inputs:
+                st.markdown("#### ⚙️ Comparable Assumptions")
+                metric_choice = st.selectbox("Choose Key Metric", ["Earnings per Share (EPS)", "EBITDA $M", "Revenue $M"])
+                
+                if metric_choice == "Earnings per Share (EPS)":
+                    base_metric = st.number_input("Company EPS ($)", value=5.0, step=0.5)
+                    target_multiple = st.number_input("Target P/E Multiple (Industry Avg)", value=15.0, step=1.0)
+                elif metric_choice == "EBITDA $M":
+                    base_metric = st.number_input("Company EBITDA $M", value=500.0, step=50.0)
+                    target_multiple = st.number_input("Target EV/EBITDA Multiple", value=10.0, step=1.0)
+                    st.markdown("#### 🏢 Capital Structure")
+                    shares_out = st.number_input("Shares Outstanding (Millions)", value=100.0, step=10.0)
+                    net_debt = st.number_input("Net Debt $M (Total Debt - Cash)", value=500.0, step=50.0)
+                else: # Revenue
+                    base_metric = st.number_input("Company Revenue $M", value=2000.0, step=100.0)
+                    target_multiple = st.number_input("Target EV/Sales Multiple", value=4.0, step=0.5)
+                    st.markdown("#### 🏢 Capital Structure")
+                    shares_out = st.number_input("Shares Outstanding (Millions)", value=100.0, step=10.0)
+                    net_debt = st.number_input("Net Debt $M", value=500.0, step=50.0)
+
+            with col_results:
+                st.markdown("#### 📊 Relative Valuation")
+                
+                if metric_choice == "Earnings per Share (EPS)":
+                    intrinsic_value = base_metric * target_multiple
+                    st.info(f"**Formula:** Implied Share Price = EPS ({base_metric}) × Target P/E ({target_multiple})")
+                
+                elif metric_choice == "EBITDA $M":
+                    implied_ev = base_metric * target_multiple
+                    implied_equity = implied_ev - net_debt
+                    intrinsic_value = implied_equity / shares_out if shares_out > 0 else 0
+                    st.info(f"**Formula:** Implied EV = EBITDA ({base_metric}) × EV/EBITDA ({target_multiple}) = {implied_ev} M<br>Equity Value = EV ({implied_ev}) - Net Debt ({net_debt}) = {implied_equity} M")
+                    
+                elif metric_choice == "Revenue $M":
+                    implied_ev = base_metric * target_multiple
+                    implied_equity = implied_ev - net_debt
+                    intrinsic_value = implied_equity / shares_out if shares_out > 0 else 0
+                    st.info(f"**Formula:** Implied EV = Revenue ({base_metric}) × EV/Sales ({target_multiple}) = {implied_ev} M<br>Equity Value = EV ({implied_ev}) - Net Debt ({net_debt}) = {implied_equity} M")
+
+                m1, m2 = st.columns(2)
+                if current_p > 0:
+                    upside = ((intrinsic_value - current_p) / current_p) * 100
+                    m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+                else:
+                    m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}")
+                
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0)):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                    save_db(df_watchlist)
+                    st.success(f"Watchlist updated!")
+
+            # Информационный блок-шпаргалка
+            st.markdown("""
+                <div class="guide-box">
+                    <h4>💡 Шпаргалка аналитика: Relative Valuation (Мультипликаторы)</h4>
+                    <ul>
+                        <li><b>P/E (Price to Earnings):</b> Подходит для прибыльных компаний с похожей структурой налогов и долга. Ужасен для оценки компаний с временными убытками или искаженной амортизацией.</li>
+                        <li><b>EV/EBITDA:</b> Отличный универсальный показатель. Нивелирует разницу в долговой нагрузке и налогах. Идеален для капиталоемких отраслей (заводы, телекомы).</li>
+                        <li><b>EV/Sales (Выручка):</b> Используется для SaaS, стартапов и быстрорастущих компаний, которые активно реинвестируют в рост рынка и пока не показывают чистую прибыль.</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
     else:
         st.warning("Your watchlist is empty. Add a company in the Terminal first.")
