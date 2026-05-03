@@ -19,7 +19,7 @@ st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     .block-container { padding-top: 3rem !important; max-width: 95% !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 120px; /* Отступ чтобы вкладки не наезжали на тикер */ }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
@@ -32,6 +32,47 @@ st.markdown("""
     .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
     div[role="radiogroup"] > label { padding-bottom: 10px; }
+    
+    /* ---------------------------------------------------
+       МАГИЯ CSS: СТИЛИЗАЦИЯ ВЫБОРА КОМПАНИИ ПОД ВКЛАДКУ
+       --------------------------------------------------- */
+    #active-company-anchor { display: none; }
+    
+    /* Прикрепляем к правому краю, на уровень вкладок */
+    div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div {
+        position: absolute;
+        right: 0px;
+        margin-top: 5px; 
+        width: 110px;
+        z-index: 100;
+        background-color: #0d1117; /* Прячет скролл вкладок на телефоне */
+    }
+    
+    /* Убираем рамки и фон */
+    div:has(#active-company-anchor) + div div[data-baseweb="select"] > div {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        cursor: pointer;
+        padding-right: 0 !important;
+    }
+    
+    /* Делаем шрифт точь-в-точь как у вкладок */
+    div:has(#active-company-anchor) + div div[data-baseweb="select"] {
+        color: #8b949e !important;
+        font-weight: 500 !important;
+        font-size: 15px !important;
+    }
+    
+    /* Белый цвет при наведении (hover) */
+    div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover {
+        color: #ffffff !important;
+    }
+    
+    /* Цвет стрелочки */
+    div:has(#active-company-anchor) + div div[data-baseweb="select"] svg {
+        fill: currentColor !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -226,42 +267,41 @@ if os.path.exists(DB_FILE):
 else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
-
 # ==========================================
-# САЙДБАР (ТЕПЕРЬ ИСКЛЮЧИТЕЛЬНО ДЛЯ НАВИГАЦИИ)
+# SIDEBAR (ТОЛЬКО НАВИГАЦИЯ)
 # ==========================================
 st.sidebar.markdown("### 🧭 Navigation")
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio"], label_visibility="collapsed")
-
 
 # ==========================================
 # MAIN INTERFACE HEADER FUNCTION
 # ==========================================
 def render_header():
     st.markdown("""
-        <div style="margin-bottom: 10px;">
+        <div style="margin-bottom: 25px;">
             <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">PAX</h1>
             <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
         </div>
     """, unsafe_allow_html=True)
 
-
 # ==========================================
-# РОУТИНГ ПРИЛОЖЕНИЯ (ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ)
+# РОУТИНГ ПРИЛОЖЕНИЯ
 # ==========================================
 
 if app_mode == "Terminal (Analysis)":
     
-    # --- ИЗМЕНЕНИЕ: Заголовок и Выбор компании выстроены в один ряд ---
-    col_head, col_select = st.columns([3, 1])
-    with col_head:
-        render_header()
-    with col_select:
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True) # Отступ для выравнивания
-        selected_ticker = st.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
+    render_header()
     
-    st.markdown("<br>", unsafe_allow_html=True)
-
+    # Секретный якорь для CSS, который подтянет следующий выпадающий список вправо
+    st.markdown('<div id="active-company-anchor"></div>', unsafe_allow_html=True)
+    
+    # Тот самый выбор компании (без надписи, выглядит как вкладка)
+    selected_ticker = st.selectbox(
+        "Active Company", 
+        df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], 
+        label_visibility="collapsed"
+    )
+    
     # Вкладки терминала
     tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
         "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
@@ -270,6 +310,7 @@ if app_mode == "Terminal (Analysis)":
     # --- PAGE 1: WATCHLIST ---
     with tab_watchlist:
         col_add, col_upload, col_del = st.columns(3)
+        
         with col_add:
             with st.expander("➕ Add New Company"):
                 with st.form("add_form", clear_on_submit=True):
@@ -364,7 +405,7 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 2: PROFILE ---
     with tab_profile:
-        if selected_ticker:
+        if selected_ticker and selected_ticker != "":
             st.subheader(f"Market Chart: {selected_ticker}")
             col_tf, col_int, _ = st.columns([1, 1, 2])
             with col_tf: period_ui = st.selectbox("Period", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years"], index=2)
@@ -400,7 +441,7 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 3: RATIOS ---
     with tab_ratios:
-        if selected_ticker:
+        if selected_ticker and selected_ticker != "":
             st.subheader(f"Financial Ratios: {selected_ticker}")
             path = os.path.join(FILES_DIR, f"{selected_ticker}.xlsx")
             if os.path.exists(path):
@@ -450,7 +491,7 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 4: VALUATION MODELS ---
     with tab_val_models:
-        if selected_ticker:
+        if selected_ticker and selected_ticker != "":
             st.subheader(f"Valuation Overview: {selected_ticker}")
             path = os.path.join(FILES_DIR, f"{selected_ticker}.xlsx")
             if os.path.exists(path):
@@ -538,7 +579,7 @@ if app_mode == "Terminal (Analysis)":
 
     # --- PAGE 6: NOTES ---
     with tab_notes:
-        if selected_ticker:
+        if selected_ticker and selected_ticker != "":
             st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
             st.write(f"Document your fundamental analysis, key risks, and buying rationale for **{selected_ticker}** below.")
             note_path = os.path.join(NOTES_DIR, f"{selected_ticker}_notes.txt")
