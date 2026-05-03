@@ -31,56 +31,28 @@ st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: 'Inter', sans-serif; }
     .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
-    
-    /* Sidebar Navigation Header Styling */
-    .nav-header {
-        text-align: left; 
-        border-bottom: 1px solid #30363d; 
-        padding-bottom: 8px; 
-        margin-bottom: 20px;
-    }
-    .nav-header h3 {
-        margin: 0; 
-        padding: 0; 
-        color: #ffffff; 
-        font-size: 1.1rem;
-        font-weight: 600;
-        font-family: 'Inter', sans-serif;
-        letter-spacing: 0.5px;
-    }
-
+    .nav-header { text-align: left; border-bottom: 1px solid #30363d; padding-bottom: 8px; margin-bottom: 20px; }
+    .nav-header h3 { margin: 0; padding: 0; color: #ffffff; font-size: 1.2rem; font-weight: 600; font-family: 'Inter', sans-serif; letter-spacing: 0.5px; }
     .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
     .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
-    
     div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
-    
-    /* Моноширинный шрифт для идеального выравнивания цифр */
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { 
-        color: #ffffff !important; 
-        font-weight: 700 !important; 
-        font-family: 'JetBrains Mono', monospace !important; 
-    }
-    
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; }
     hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
     .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
     div[role="radiogroup"] > label { padding-bottom: 10px; font-family: 'Inter', sans-serif; }
-    
     #active-company-anchor { display: none; }
     div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
-    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] {
-        position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important;
-    }
+    div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) > div[data-testid="stSelectbox"] { position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #8b949e !important; }
     div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
-    
     .guide-box { background-color: #1c2128; border-left: 4px solid #58a6ff; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; }
     .guide-box h4 { color: #58a6ff; margin-top: 0; }
     </style>
