@@ -17,11 +17,14 @@ st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_st
 
 st.markdown("""
     <style>
+    /* Базовые настройки страницы */
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    .block-container { padding-top: 3rem !important; max-width: 95% !important; }
+    
+    /* Делаем главный контейнер относительным, чтобы абсолютные элементы не улетали вверх */
+    .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
     
     /* Стилизация меню бара (Tabs) */
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 130px; /* Отступ справа, чтобы тикер не перекрывал вкладки */ }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 120px; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
     .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
@@ -35,45 +38,42 @@ st.markdown("""
     hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
     .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
-    
-    /* Стилизация навигации в сайдбаре */
     div[role="radiogroup"] > label { padding-bottom: 10px; }
     
     /* =========================================================
-       МАГИЯ: Выбор компании на одной линии с Меню Баром
+       ИДЕАЛЬНЫЙ ВЫБОР КОМПАНИИ (НА ЛИНИИ С МЕНЮ БАРОМ)
        ========================================================= */
     #active-company-anchor { display: none; }
     
-    /* 1. Выравниваем по правому краю ровно на уровне вкладок */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div {
-        position: absolute;
-        right: 15px;
-        margin-top: 10px; /* Эта цифра опускает селектор ровно на линию вкладок */
-        width: 110px;
-        z-index: 999;
+        position: absolute !important;
+        right: 10px !important;
+        top: 140px !important; /* ЖЕСТКАЯ ВЫСОТА: Ровно на линии меню бара */
+        width: 100px !important;
+        z-index: 9999 !important;
     }
     
-    /* 2. Убираем фон и рамки, делаем прозрачным как вкладки */
+    /* Убираем фон, делаем кнопку прозрачной */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] > div {
         background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        cursor: pointer;
+        cursor: pointer !important;
     }
     
-    /* 3. Копируем шрифт меню бара (серый, 15px, medium) */
+    /* Копируем шрифт меню бара: серый #8b949e, толщина 500, 15px */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] span {
         color: #8b949e !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
         font-size: 15px !important;
     }
     
-    /* 4. Цвет иконки-стрелочки */
+    /* Цвет стрелочки */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"] svg {
         fill: #8b949e !important;
     }
     
-    /* 5. Белый цвет при наведении (эффект ховера) */
+    /* При наведении делаем белым, как вкладки меню бара */
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover span,
     div[data-testid="stVerticalBlock"] > div:has(#active-company-anchor) + div div[data-baseweb="select"]:hover svg {
         color: #ffffff !important;
@@ -296,17 +296,17 @@ if app_mode == "Terminal (Analysis)":
     
     render_header()
     
-    # Невидимый якорь, к которому привяжется селектор
+    # Невидимый якорь, за которым сразу идет выпадающий список.
     st.markdown('<div id="active-company-anchor"></div>', unsafe_allow_html=True)
     
-    # Селектор без надписи "Active Company" (label_visibility="collapsed")
+    # Тот самый селектор. Без надписи, прозрачный, справа на линии вкладок.
     selected_ticker = st.selectbox(
         "Active Company", 
         df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], 
         label_visibility="collapsed"
     )
     
-    # Вкладки терминала (селектор будет примагничен вправо на их уровень)
+    # Вкладки терминала
     tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
         "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
     ])
