@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# СЛОВАРЬ ПОДСКАЗОК ДЛЯ МЕТРИК
+# RATIO EXPLANATIONS
 # ==========================================
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations. A ratio > 1 indicates good financial health.",
@@ -48,7 +48,7 @@ RATIO_EXPLANATIONS = {
 }
 
 # ==========================================
-# 2. БАЗОВЫЕ ФУНКЦИИ И ПАПКИ
+# 2. CORE FUNCTIONS & DIRS
 # ==========================================
 DB_FILE = "watchlist.csv"
 FILES_DIR = "analyses"
@@ -56,7 +56,6 @@ NOTES_DIR = "notes"
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
-# --- НОВАЯ ФУНКЦИЯ: Умный поиск тикера по названию ---
 def search_company(query):
     query = str(query).strip()
     if not query: return "", ""
@@ -66,16 +65,13 @@ def search_company(query):
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
             quotes = data.get('quotes', [])
-            # Ищем первую попавшуюся акцию (EQUITY)
             for q in quotes:
                 if q.get('quoteType') in ['EQUITY', 'ETF']:
                     return q.get('symbol', query.upper()), q.get('shortname', query)
-            # Если акций нет, берем первый попавшийся результат
             if quotes:
                 return quotes[0].get('symbol', query.upper()), quotes[0].get('shortname', query)
     except Exception:
         pass
-    # Если интернет отвалился или ничего не найдено, возвращаем то, что ввел пользователь
     return query.upper(), query
 
 def get_current_price(ticker):
@@ -250,13 +246,13 @@ def render_header():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. ВЕРХНЕЕ МЕНЮ
+# 3. TOP MENU TABS
 # ==========================================
 tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
     "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
 ])
 
-# --- СТРАНИЦА 1: WATCHLIST ---
+# --- PAGE 1: WATCHLIST ---
 with tab_watchlist:
     render_header()
     col_add, col_upload, col_del = st.columns(3)
@@ -264,13 +260,11 @@ with tab_watchlist:
     with col_add:
         with st.expander("➕ Add New Company"):
             with st.form("add_form", clear_on_submit=True):
-                # Поле изменено для ввода либо тикера, либо названия
                 nt = st.text_input("Company Name or Ticker (e.g., Tesla or TSLA)")
                 ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
                 
                 if st.form_submit_button("Add") and nt:
                     with st.spinner(f"Searching database for '{nt}'..."):
-                        # Ищем реальный тикер и название
                         real_ticker, real_name = search_company(nt)
                         price = get_current_price(real_ticker)
                         
@@ -358,7 +352,7 @@ with tab_watchlist:
         df_watchlist.to_csv(DB_FILE, index=False)
         st.rerun()
 
-# --- СТРАНИЦА 2: PROFILE ---
+# --- PAGE 2: PROFILE ---
 with tab_profile:
     render_header()
     if selected_ticker:
@@ -403,7 +397,7 @@ with tab_profile:
             
     else: st.warning("Select a company in the sidebar.")
 
-# --- СТРАНИЦА 3: RATIOS ---
+# --- PAGE 3: RATIOS ---
 with tab_ratios:
     render_header()
     if selected_ticker:
@@ -454,7 +448,7 @@ with tab_ratios:
             else: st.error("Sheet 'Ratios' not found.")
         else: st.info("No file attached for this company.")
 
-# --- СТРАНИЦА 4: VALUATION MODELS ---
+# --- PAGE 4: VALUATION MODELS ---
 with tab_val_models:
     render_header()
     if selected_ticker:
@@ -516,7 +510,7 @@ with tab_val_models:
             else: st.warning("No Valuation models found in this file.")
         else: st.info("No file attached.")
 
-# --- СТРАНИЦА 5: COMPARE ---
+# --- PAGE 5: COMPARE ---
 with tab_compare:
     render_header()
     st.subheader("Peer Comparison Dashboard")
@@ -546,7 +540,7 @@ with tab_compare:
         else: st.info("Select at least one company to see the comparison.")
     else: st.info("Your watchlist is empty. Add companies first.")
 
-# --- СТРАНИЦА 6: NOTES ---
+# --- PAGE 6: NOTES (FIXED STATE BUG) ---
 with tab_notes:
     render_header()
     if selected_ticker:
@@ -558,13 +552,17 @@ with tab_notes:
         if os.path.exists(note_path):
             with open(note_path, "r", encoding="utf-8") as f: existing_note = f.read()
             
+        # The key dynamically changes with the ticker, forcing the text area to refresh!
         new_note = st.text_area(
             "Editor (Markdown supported)", 
-            value=existing_note, height=500, label_visibility="collapsed",
-            placeholder="Example:\n\n### Bull Case\n* Strong moat in cloud computing.\n* Consistent 20%+ ROE over the last 5 years.\n\n### Bear Case\n* High valuation (P/E > 30).\n* Regulatory risks in Europe.\n\n**Action Plan:** Will initiate position if price drops below $120."
+            value=existing_note, 
+            height=500, 
+            label_visibility="collapsed",
+            placeholder="Example:\n\n### Bull Case\n* Strong moat in cloud computing.\n* Consistent 20%+ ROE over the last 5 years.\n\n### Bear Case\n* High valuation (P/E > 30).\n* Regulatory risks in Europe.\n\n**Action Plan:** Will initiate position if price drops below $120.",
+            key=f"note_editor_{selected_ticker}" 
         )
         
-        if st.button("💾 Save Notes", type="primary"):
+        if st.button("💾 Save Notes", type="primary", key=f"save_btn_{selected_ticker}"):
             with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
             st.success("Investment notes saved securely!")
     else:
