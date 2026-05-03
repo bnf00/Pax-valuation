@@ -8,7 +8,6 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import json
-import gspread
 
 # ==========================================
 # 1. PAGE CONFIG & PREMIUM CSS DESIGN
@@ -222,71 +221,28 @@ def extract_key_ratios(df):
                     except ValueError: results[key] = str(val) if str(val).strip() not in excel_errors else "N/A"
     return results
 
-
 # ==========================================
-# УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (GOOGLE SHEETS)
+# ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ (БЕЗ GOOGLE)
 # ==========================================
-worksheet = None
+DB_FILE = "watchlist.csv"
 
-try:
-    if "google_json" in st.secrets:
-        creds_json = st.secrets["google_json"]
-        creds_dict = json.loads(creds_json)
-        gc = gspread.service_account_from_dict(creds_dict)
-        sh = gc.open("Pax_Database")
-        worksheet = sh.sheet1
-        
-        data = worksheet.get_all_values() 
-        if data and len(data) > 0:
-            headers = data[0]
-            if len(data) > 1:
-                df_watchlist = pd.DataFrame(data[1:], columns=headers)
-            else:
-                df_watchlist = pd.DataFrame(columns=headers)
-            
-            if 'Shares' in df_watchlist.columns: df_watchlist['Shares'] = pd.to_numeric(df_watchlist['Shares'], errors='coerce').fillna(0.0)
-            if 'Avg Cost' in df_watchlist.columns: df_watchlist['Avg Cost'] = pd.to_numeric(df_watchlist['Avg Cost'], errors='coerce').fillna(0.0)
-            if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower().isin(['true', '1', 't', 'yes', 'y'])
-        else:
-            df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-            
-        st.sidebar.success("🟢 Connected to Cloud Database")
-    else:
-        raise Exception("Secret 'google_json' not found")
-        
-except Exception as e:
-    st.sidebar.error(f"🔴 Offline Mode (Check Secrets or Access)")
-    if os.path.exists("watchlist.csv"):
-        df_watchlist = pd.read_csv("watchlist.csv")
-    else:
-        df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
+if os.path.exists(DB_FILE):
+    df_watchlist = pd.read_csv(DB_FILE)
+    if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
+    if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
+    if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
+else:
+    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
 def save_db(df):
-    global worksheet
-    try:
-        if "google_json" in st.secrets and worksheet is not None:
-            df_clean = df.copy().fillna("")
-            data_to_save = [df_clean.columns.tolist()] + df_clean.values.tolist()
-            
-            worksheet.clear()
-            
-            # Бронебойная запись: работает на любой версии gspread
-            try:
-                worksheet.update(values=data_to_save, range_name="A1")
-            except TypeError:
-                worksheet.update("A1", data_to_save)
-        else:
-            df.to_csv("watchlist.csv", index=False)
-    except Exception as e:
-        st.error(f"⚠️ Ошибка при сохранении в облако: {e}")
-        df.to_csv("watchlist.csv", index=False)
-
+    df.to_csv(DB_FILE, index=False)
 
 # ==========================================
-# SIDEBAR (ТОЛЬКО НАВИГАЦИЯ)
+# SIDEBAR NAVIGATION
 # ==========================================
 st.sidebar.markdown("### 🧭 Navigation")
-app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio"], label_visibility="collapsed")
+# Added "DCF Lab" as a completely new page in the main navigation
+app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "DCF Lab"], label_visibility="collapsed")
 
 def render_header():
     st.markdown("""
@@ -297,7 +253,7 @@ def render_header():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# РОУТИНГ ПРИЛОЖЕНИЯ
+# APP ROUTING
 # ==========================================
 
 if app_mode == "Terminal (Analysis)":
@@ -315,6 +271,7 @@ if app_mode == "Terminal (Analysis)":
             label_visibility="collapsed"
         )
         
+        # Restored the original Excel Valuation Models tab here
         tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
             "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
         ])
@@ -326,16 +283,15 @@ if app_mode == "Terminal (Analysis)":
         with col_add:
             with st.expander("➕ Add New Company"):
                 with st.form("add_form", clear_on_submit=True):
-                    nt = st.text_input("Company Name or Ticker (e.g., Tesla or TSLA)")
+                    nt = st.text_input("Company Name or Ticker (e.g., TSLA)")
                     ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
                     if st.form_submit_button("Add") and nt:
-                        with st.spinner(f"Searching database for '{nt}'..."):
-                            real_ticker, real_name = search_company(nt)
-                            price = get_current_price(real_ticker)
-                            new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
-                            df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
-                            save_db(df_watchlist)
-                            st.rerun()
+                        real_ticker, real_name = search_company(nt)
+                        price = get_current_price(real_ticker)
+                        new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
+                        df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
+                        save_db(df_watchlist)
+                        st.rerun()
 
         with col_upload:
             with st.expander("📂 Upload Excel Analysis"):
@@ -361,13 +317,6 @@ if app_mode == "Terminal (Analysis)":
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        with st.expander("⚙️ Advanced Screener"):
-            sc1, sc2 = st.columns(2)
-            with sc1: filter_interest = st.multiselect("Filter by Interest:", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], default=[])
-            with sc2:
-                use_pot_filter = st.checkbox("Enable Minimum Potential Upside Filter")
-                filter_potential = st.number_input("Minimum Upside (%)", value=0.0, step=5.0, disabled=not use_pot_filter)
-
         col_btn, col_search = st.columns([1, 4])
         with col_btn:
             if st.button("🔄 Update Market Data", use_container_width=True):
@@ -382,21 +331,9 @@ if app_mode == "Terminal (Analysis)":
         with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
 
         display_df = df_watchlist.copy()
-        
         if search_query:
             mask = display_df['Stock'].str.contains(search_query, case=False, na=False) | display_df['Company name'].str.contains(search_query, case=False, na=False)
             display_df = display_df[mask]
-
-        if filter_interest: display_df = display_df[display_df['Interest'].isin(filter_interest)]
-            
-        if use_pot_filter:
-            def parse_potential(val):
-                if pd.isna(val) or val in ["N/A", "None", ""]: return -9999.0
-                try: return float(str(val).replace('+', '').replace('%', '').strip())
-                except: return -9999.0
-            display_df['Num_Potential'] = display_df['Potential'].apply(parse_potential)
-            display_df = display_df[display_df['Num_Potential'] >= filter_potential]
-            display_df.drop(columns=['Num_Potential'], inplace=True)
         
         edited_df = st.data_editor(
             display_df,
@@ -434,7 +371,7 @@ if app_mode == "Terminal (Analysis)":
                     try:
                         iv_float = float(str(iv_raw).replace('$', '').replace(',', ''))
                         if iv_float > 0:
-                            fig.add_hline(y=iv_float, line_dash="dash", line_color="#E04F5F", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right", annotation_font_color="#E04F5F", annotation_font_size=12)
+                            fig.add_hline(y=iv_float, line_dash="dash", line_color="#E04F5F", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right")
                     except: pass
                     fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig, use_container_width=True)
@@ -469,39 +406,12 @@ if app_mode == "Terminal (Analysis)":
                             tooltip_text = RATIO_EXPLANATIONS.get(name, "Financial Metric")
                             with cols[i % 5]: st.metric(label=name, value=val, help=tooltip_text)
                             if (i + 1) % 5 == 0: st.markdown("<br>", unsafe_allow_html=True)
-                        st.markdown("<hr>", unsafe_allow_html=True)
-                    
-                    st.subheader("Fundamental Trends Visualization")
-                    year_cols = [c for c in df.columns if re.search(r'(20\d{2})', str(c))]
-                    if year_cols:
-                        valid_rows = df[df.iloc[:, 0].notna()]
-                        raw_metrics_list = valid_rows.iloc[:, 0].astype(str).tolist()
-                        metrics_list = []
-                        ignore_words = ["name", "item", "ratios", "metric", "metrics", "-", "unnamed"]
-                        for m in raw_metrics_list:
-                            m_clean = m.strip()
-                            if m_clean and not m_clean.lower().startswith('unnamed') and m_clean.lower() not in ignore_words and m_clean not in metrics_list:
-                                metrics_list.append(m_clean)
-                        if metrics_list:
-                            selected_metric = st.selectbox("Select Metric to Visualize over Time:", metrics_list)
-                            if selected_metric:
-                                row_data = df[df.iloc[:, 0].astype(str).str.strip() == selected_metric].iloc[0]
-                                y_values, x_years = [], []
-                                for yc in year_cols:
-                                    try:
-                                        num = float(str(row_data[yc]).replace(',', '').replace('%', '').strip())
-                                        y_values.append(num); x_years.append(str(yc))
-                                    except: pass
-                                if y_values:
-                                    fig_bar = go.Figure(data=[go.Bar(x=x_years, y=y_values, marker_color="#58a6ff", textposition="auto")])
-                                    fig_bar.update_layout(title=f"{selected_metric} Trend", height=400, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                                    st.plotly_chart(fig_bar, use_container_width=True)
                     st.markdown("<hr>", unsafe_allow_html=True)
                     with st.expander("View Full Raw Data", expanded=not bool(key_metrics)): st.dataframe(clean_excel_data(df), use_container_width=True, height=(len(df)*35)+40)
                 else: st.error("Sheet 'Ratios' not found.")
             else: st.info("No file attached for this company.")
-
-    # --- PAGE 4: VALUATION MODELS ---
+            
+    # --- PAGE 4: VALUATION MODELS (Restored!) ---
     with tab_val_models:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Valuation Overview: {selected_ticker}")
@@ -609,7 +519,6 @@ if app_mode == "Terminal (Analysis)":
         else:
             st.warning("Your watchlist is empty.")
 
-
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
 # ==========================================
@@ -667,3 +576,92 @@ elif app_mode == "My Portfolio":
             
     else:
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
+
+# ==========================================
+# РОУТИНГ: РЕЖИМ DCF LAB (NEW PAGE)
+# ==========================================
+elif app_mode == "DCF Lab":
+    render_header()
+    st.subheader("🧪 Discounted Cash Flow Laboratory")
+    
+    if not df_watchlist.empty:
+        # Create a specific selector for this page
+        selected_ticker = st.selectbox("Select Company for Analysis", df_watchlist['Stock'].tolist())
+        
+        st.write(f"Dynamic valuation model for **{selected_ticker}**. Adjust the assumptions below to calculate the intrinsic value.")
+        
+        # Split screen for Inputs and Results
+        col_inputs, col_results = st.columns([1, 2], gap="large")
+        
+        with col_inputs:
+            st.markdown("#### ⚙️ Assumptions")
+            # Base variables
+            fcf_base = st.number_input("Base Free Cash Flow (FCF) $M", value=1000.0, step=100.0, help="Free Cash Flow for Year 0")
+            growth_rate = st.slider("Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=10.0, step=1.0, format="%f%%") / 100
+            terminal_growth = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=2.5, step=0.1, format="%f%%") / 100
+            wacc = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=9.0, step=0.5, format="%f%%") / 100
+            
+            st.markdown("#### 🏢 Capital Structure")
+            shares_out = st.number_input("Shares Outstanding (Millions)", value=500.0, step=10.0)
+            net_debt = st.number_input("Net Debt $M (Total Debt - Cash)", value=2000.0, step=100.0)
+            
+        with col_results:
+            st.markdown("#### 📊 Projections & Valuation")
+            
+            # DCF Math logic
+            fcfs = []
+            pvs = []
+            years = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
+            
+            for year in range(1, 6):
+                fcf = fcf_base * ((1 + growth_rate) ** year)
+                pv = fcf / ((1 + wacc) ** year)
+                fcfs.append(fcf)
+                pvs.append(pv)
+                
+            # Terminal Value Calculation
+            terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth)
+            pv_tv = terminal_value / ((1 + wacc) ** 5)
+            
+            # Final Metrics
+            enterprise_val = sum(pvs) + pv_tv
+            equity_val = enterprise_val - net_debt
+            intrinsic_value = equity_val / shares_out if shares_out > 0 else 0
+            
+            # Displaying Metrics
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Enterprise Value", f"${enterprise_val:,.1f} M")
+            m2.metric("Equity Value", f"${equity_val:,.1f} M")
+            
+            current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
+            current_p = safe_float(current_price_str)
+            
+            if current_p > 0:
+                upside = ((intrinsic_value - current_p) / current_p) * 100
+                m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+            else:
+                m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Cash Flow Chart
+            fig_dcf = go.Figure()
+            fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#238636'))
+            fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#58a6ff'))
+            
+            fig_dcf.update_layout(
+                title="Cash Flow Projections (Next 5 Years)",
+                barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_dcf, use_container_width=True)
+            
+            # Sync Button
+            if st.button("💾 Sync Intrinsic Value to Watchlist", type="primary", use_container_width=True):
+                df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
+                df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(current_price_str, intrinsic_value)
+                save_db(df_watchlist)
+                st.success(f"Successfully updated intrinsic value for {selected_ticker}!")
+    else:
+        st.warning("Your watchlist is empty. Add a company in the Terminal first.")o a company to add it here.")
