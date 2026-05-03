@@ -664,5 +664,3 @@ elif app_mode == "My Portfolio":
             st.rerun()
             
     else:
-        st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
-```</Response>
