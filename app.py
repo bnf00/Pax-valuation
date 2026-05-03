@@ -243,7 +243,8 @@ try:
             if 'In Portfolio' in df_watchlist.columns: df_watchlist['In Portfolio'] = df_watchlist['In Portfolio'].astype(str).str.lower() == 'true'
         else:
             df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-            worksheet.update([df_watchlist.columns.values.tolist()], "A1")
+            # УНИВЕРСАЛЬНОЕ ОБНОВЛЕНИЕ ДЛЯ ЛЮБОЙ ВЕРСИИ GSPREAD
+            worksheet.update(range_name="A1", values=[df_watchlist.columns.values.tolist()])
             
         st.sidebar.success("🟢 Connected to Cloud Database")
     else:
@@ -263,7 +264,8 @@ def save_db(df):
             df_clean = df_clean.fillna("") 
             data_to_save = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
             worksheet.clear()
-            worksheet.update(data_to_save, "A1")
+            # УНИВЕРСАЛЬНОЕ ОБНОВЛЕНИЕ ДЛЯ ЛЮБОЙ ВЕРСИИ GSPREAD
+            worksheet.update(range_name="A1", values=data_to_save)
         else:
             df.to_csv("watchlist.csv", index=False)
     except Exception as e:
@@ -597,6 +599,7 @@ if app_mode == "Terminal (Analysis)":
                 st.success("Investment notes saved securely!")
         else:
             st.warning("Your watchlist is empty.")
+
 
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
