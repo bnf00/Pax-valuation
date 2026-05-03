@@ -25,9 +25,11 @@ if 'v_state' not in st.session_state:
         'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
     }
 
+# Подключаем новые премиальные шрифты (Inter для текста, JetBrains Mono для цифр)
 st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
-    .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .stApp { background-color: #0d1117; color: #c9d1d9; font-family: 'Inter', sans-serif; }
     .block-container { position: relative; padding-top: 3rem !important; max-width: 95% !important; }
     
     /* Sidebar Navigation Header Styling */
@@ -41,24 +43,33 @@ st.markdown("""
         margin: 0; 
         padding: 0; 
         color: #ffffff; 
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         font-weight: 600;
+        font-family: 'Inter', sans-serif;
+        letter-spacing: 0.5px;
     }
 
     .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; padding-right: 180px !important; }
     .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
-    .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
+    .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; font-family: 'Inter', sans-serif; }
     .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
     .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
     
     div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-    div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
+    div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; font-family: 'Inter', sans-serif; }
+    
+    /* Моноширинный шрифт для идеального выравнивания цифр */
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { 
+        color: #ffffff !important; 
+        font-weight: 700 !important; 
+        font-family: 'JetBrains Mono', monospace !important; 
+    }
+    
     hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
-    .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
+    .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; font-family: 'Inter', sans-serif; }
     div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
-    div[role="radiogroup"] > label { padding-bottom: 10px; }
+    div[role="radiogroup"] > label { padding-bottom: 10px; font-family: 'Inter', sans-serif; }
     
     #active-company-anchor { display: none; }
     div[data-testid="stVerticalBlock"]:has(> div > #active-company-anchor) { position: relative !important; }
@@ -66,11 +77,11 @@ st.markdown("""
         position: absolute !important; right: 0px !important; top: 2px !important; width: 170px !important; z-index: 999 !important;
     }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] span { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; text-align: right; font-family: 'Inter', sans-serif; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] svg { fill: #8b949e !important; }
     div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] span, div[data-testid="stSelectbox"]:hover div[data-baseweb="select"] svg { color: #ffffff !important; fill: #ffffff !important; }
     
-    .guide-box { background-color: #1c2128; border-left: 4px solid #58a6ff; padding: 15px; border-radius: 4px; margin-top: 30px; }
+    .guide-box { background-color: #1c2128; border-left: 4px solid #58a6ff; padding: 15px; border-radius: 4px; margin-top: 30px; font-family: 'Inter', sans-serif; }
     .guide-box h4 { color: #58a6ff; margin-top: 0; }
     </style>
 """, unsafe_allow_html=True)
@@ -251,7 +262,7 @@ def extract_key_ratios(df):
     return results
 
 # ==========================================
-# ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ (БЕЗ GOOGLE)
+# ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ
 # ==========================================
 DB_FILE = "watchlist.csv"
 
@@ -285,10 +296,16 @@ st.sidebar.markdown("""
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
+    # ДИЗАЙН: Новая эмблема Pax и чистая типографика
     st.markdown("""
-        <div style="margin-bottom: 25px;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.8rem; font-weight: 800; color: #ffffff; letter-spacing: -1px; line-height: 1;">Pax</h1>
-            <p style="margin: 5px 0 0 0; padding: 0; color: #8b949e; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Fundamental Analysis System</p>
+        <div style="display: flex; align-items: center; margin-bottom: 30px;">
+            <div style="background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%); width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px; box-shadow: 0 4px 15px rgba(88, 166, 255, 0.25);">
+                <span style="color: white; font-size: 24px; font-weight: 800; font-family: 'Inter', sans-serif;">P</span>
+            </div>
+            <div>
+                <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1; font-family: 'Inter', sans-serif;">Pax</h1>
+                <p style="margin: 4px 0 0 0; padding: 0; color: #8b949e; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'Inter', sans-serif;">Fundamental Analysis</p>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
