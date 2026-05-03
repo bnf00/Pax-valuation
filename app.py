@@ -662,5 +662,3 @@ elif app_mode == "My Portfolio":
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Avg Cost'] = row['Avg Cost']
             save_db(df_watchlist)
             st.rerun()
-            
-    else:
