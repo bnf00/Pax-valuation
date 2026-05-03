@@ -80,9 +80,13 @@ def get_current_price(ticker):
         return round(stock.fast_info['last_price'], 2)
     except: return "Error"
 
+def safe_float(val):
+    try: return float(str(val).replace('$', '').replace(',', '').strip())
+    except: return 0.0
+
 def calculate_potential(current_price_str, fair_value):
     try:
-        c = float(str(current_price_str).replace('$', '').replace(',', ''))
+        c = safe_float(current_price_str)
         f = float(fair_value)
         if c > 0 and f > 0:
             pot = ((f - c) / c) * 100
@@ -214,9 +218,7 @@ def extract_key_ratios(df):
 # ==========================================
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
-    # Очистка старых данных
     if 'File' in df_watchlist.columns: df_watchlist.drop(columns=['File'], inplace=True)
-    # Добавление новых колонок для портфеля
     if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
     if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
     if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
@@ -224,62 +226,10 @@ else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
 # ==========================================
-# SIDEBAR (ВЫБОР КОМПАНИИ И ПОРТФЕЛЬ)
+# SIDEBAR (ЧИСТЫЙ)
 # ==========================================
 selected_ticker = st.sidebar.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
 st.sidebar.markdown("---")
-
-# --- БЛОК PORTFOLIO TRACKER ---
-st.sidebar.markdown("### 💼 My Portfolio")
-portfolio_df = df_watchlist[df_watchlist['In Portfolio'] == True]
-
-if not portfolio_df.empty:
-    total_value = 0.0
-    total_cost = 0.0
-    
-    for index, row in portfolio_df.iterrows():
-        st.sidebar.markdown(f"**{row['Stock']}**")
-        col1, col2 = st.sidebar.columns(2)
-        
-        # Инпуты для ввода данных прямо в сайдбаре
-        shares = col1.number_input("Shares", min_value=0.0, value=float(row['Shares']), step=1.0, key=f"sh_{row['Stock']}")
-        avg_cost = col2.number_input("Avg Cost ($)", min_value=0.0, value=float(row['Avg Cost']), step=1.0, key=f"co_{row['Stock']}")
-        
-        # Обновляем базу, если цифры изменились
-        if shares != row['Shares'] or avg_cost != row['Avg Cost']:
-            df_watchlist.loc[df_watchlist['Stock'] == row['Stock'], 'Shares'] = shares
-            df_watchlist.loc[df_watchlist['Stock'] == row['Stock'], 'Avg Cost'] = avg_cost
-            df_watchlist.to_csv(DB_FILE, index=False)
-            st.rerun()
-            
-        # Расчет P&L
-        try:
-            current_price = float(str(row['Market price']).replace('$', '').replace(',', ''))
-            value = shares * current_price
-            cost = shares * avg_cost
-            pnl = value - cost
-            pnl_pct = (pnl / cost * 100) if cost > 0 else 0.0
-            
-            total_value += value
-            total_cost += cost
-            
-            color = "#2ea043" if pnl >= 0 else "#f85149"
-            sign = "+" if pnl >= 0 else ""
-            st.sidebar.markdown(f"<div style='text-align: right; color:{color}; font-size:14px; font-weight: 600;'>{sign}${pnl:,.2f} ({sign}{pnl_pct:.2f}%)</div>", unsafe_allow_html=True)
-        except:
-            st.sidebar.caption("Price sync error")
-        st.sidebar.markdown("<hr style='margin: 10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
-        
-    st.sidebar.markdown("#### Total Value")
-    total_pnl = total_value - total_cost
-    total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
-    tot_color = "#2ea043" if total_pnl >= 0 else "#f85149"
-    tot_sign = "+" if total_pnl >= 0 else ""
-    st.sidebar.markdown(f"<h2 style='margin:0; padding:0;'>${total_value:,.2f}</h2>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"<p style='color:{tot_color}; font-weight:600;'>{tot_sign}${total_pnl:,.2f} ({tot_sign}{total_pnl_pct:.2f}%)</p>", unsafe_allow_html=True)
-
-else:
-    st.sidebar.info("Your portfolio is empty. Tick the 'Portfolio' box in the Watchlist to add stocks here.")
 
 # ==========================================
 # MAIN INTERFACE
@@ -292,8 +242,9 @@ def render_header():
         </div>
     """, unsafe_allow_html=True)
 
-tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
-    "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
+# ИЗМЕНЕНИЕ: ДОБАВЛЕНА НОВАЯ ВКЛАДКА "Portfolio"
+tab_watchlist, tab_portfolio, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
+    "Watchlist", "Portfolio", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
 ])
 
 # --- PAGE 1: WATCHLIST ---
@@ -376,14 +327,13 @@ with tab_watchlist:
         display_df = display_df[display_df['Num_Potential'] >= filter_potential]
         display_df.drop(columns=['Num_Potential'], inplace=True)
     
-    # --- ИЗМЕНЕНО: Настройка колонок в таблице ---
     edited_df = st.data_editor(
         display_df,
         use_container_width=True, hide_index=True,
         column_config={
             "Interest": st.column_config.SelectboxColumn("Interest", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], required=True),
             "In Portfolio": st.column_config.CheckboxColumn("Portfolio", default=False),
-            "Shares": None, # Прячем технические колонки
+            "Shares": None,
             "Avg Cost": None
         },
         disabled=["Stock", "Company name", "Market price", "Intrinsic value", "Potential"]
@@ -394,7 +344,69 @@ with tab_watchlist:
         df_watchlist.to_csv(DB_FILE, index=False)
         st.rerun()
 
-# --- PAGE 2: PROFILE ---
+# --- PAGE 2: PORTFOLIO (НОВАЯ ВКЛАДКА) ---
+with tab_portfolio:
+    render_header()
+    st.subheader("💼 My Portfolio Dashboard")
+    
+    portfolio_df = df_watchlist[df_watchlist['In Portfolio'] == True].copy()
+    
+    if not portfolio_df.empty:
+        # Подготавливаем данные для расчетов
+        display_port = portfolio_df[['Stock', 'Company name', 'Shares', 'Avg Cost']].copy()
+        display_port['Market price'] = portfolio_df['Market price'].apply(safe_float)
+        display_port['Total Value'] = display_port['Shares'] * display_port['Market price']
+        display_port['Total Cost'] = display_port['Shares'] * display_port['Avg Cost']
+        display_port['P&L ($)'] = display_port['Total Value'] - display_port['Total Cost']
+        display_port['P&L (%)'] = display_port.apply(lambda row: (row['P&L ($)'] / row['Total Cost'] * 100) if row['Total Cost'] > 0 else 0.0, axis=1)
+        
+        # Считаем итоги
+        total_value = display_port['Total Value'].sum()
+        total_cost = display_port['Total Cost'].sum()
+        total_pnl = total_value - total_cost
+        total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
+        
+        # Выводим 3 главные метрики сверху
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Value", f"${total_value:,.2f}")
+        m2.metric("Total Cost Basis", f"${total_cost:,.2f}")
+        m3.metric("Total Return (P&L)", f"${total_pnl:,.2f}", f"{total_pnl_pct:.2f}%")
+        
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.write("📝 **Edit your positions below:** (Update 'Shares' and 'Avg Cost')")
+        
+        # Таблица для редактирования
+        edit_df = display_port[['Stock', 'Company name', 'Market price', 'Shares', 'Avg Cost', 'Total Value', 'P&L ($)', 'P&L (%)']]
+        
+        edited_port = st.data_editor(
+            edit_df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["Stock", "Company name", "Market price", "Total Value", "P&L ($)", "P&L (%)"],
+            column_config={
+                "Market price": st.column_config.NumberColumn(format="$%.2f"),
+                "Total Value": st.column_config.NumberColumn(format="$%.2f"),
+                "P&L ($)": st.column_config.NumberColumn(format="$%.2f"),
+                "P&L (%)": st.column_config.NumberColumn(format="%.2f%%"),
+                "Shares": st.column_config.NumberColumn(min_value=0.0, step=1.0),
+                "Avg Cost": st.column_config.NumberColumn("Avg Cost ($)", min_value=0.0, step=1.0, format="%.2f"),
+            }
+        )
+        
+        # Сохранение изменений
+        if not edited_port[['Shares', 'Avg Cost']].equals(edit_df[['Shares', 'Avg Cost']]):
+            for index, row in edited_port.iterrows():
+                stock = row['Stock']
+                df_watchlist.loc[df_watchlist['Stock'] == stock, 'Shares'] = row['Shares']
+                df_watchlist.loc[df_watchlist['Stock'] == stock, 'Avg Cost'] = row['Avg Cost']
+            df_watchlist.to_csv(DB_FILE, index=False)
+            st.rerun()
+            
+    else:
+        st.info("Your portfolio is empty. Go to the Watchlist tab and tick the 'Portfolio' checkbox next to a company to add it here.")
+
+
+# --- PAGE 3: PROFILE ---
 with tab_profile:
     render_header()
     if selected_ticker:
@@ -431,7 +443,7 @@ with tab_profile:
         else: st.info("No recent news found for this ticker.")
     else: st.warning("Select a company in the sidebar.")
 
-# --- PAGE 3: RATIOS ---
+# --- PAGE 4: RATIOS ---
 with tab_ratios:
     render_header()
     if selected_ticker:
@@ -482,7 +494,7 @@ with tab_ratios:
             else: st.error("Sheet 'Ratios' not found.")
         else: st.info("No file attached for this company.")
 
-# --- PAGE 4: VALUATION MODELS ---
+# --- PAGE 5: VALUATION MODELS ---
 with tab_val_models:
     render_header()
     if selected_ticker:
@@ -542,7 +554,7 @@ with tab_val_models:
             else: st.warning("No Valuation models found in this file.")
         else: st.info("No file attached.")
 
-# --- PAGE 5: COMPARE ---
+# --- PAGE 6: COMPARE ---
 with tab_compare:
     render_header()
     st.subheader("Peer Comparison Dashboard")
@@ -572,7 +584,7 @@ with tab_compare:
         else: st.info("Select at least one company to see the comparison.")
     else: st.info("Your watchlist is empty. Add companies first.")
 
-# --- PAGE 6: NOTES ---
+# --- PAGE 7: NOTES ---
 with tab_notes:
     render_header()
     if selected_ticker:
