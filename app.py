@@ -14,6 +14,17 @@ import json
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
+# Инициализация хранилища памяти (Session State), чтобы данные не аннулировались
+if 'v_state' not in st.session_state:
+    st.session_state.v_state = {
+        'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
+        'dcf_fcf': 1000.0, 'dcf_g': 10.0, 'dcf_tg': 2.5, 'dcf_wacc': 9.0, 'dcf_shares': 500.0, 'dcf_debt': 2000.0,
+        'rel_choice': "Earnings per Share (EPS)",
+        'rel_eps': 5.0, 'rel_pe': 15.0,
+        'rel_ebitda': 500.0, 'rel_eveb': 10.0, 'rel_sh1': 100.0, 'rel_nd1': 500.0,
+        'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
+    }
+
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -226,8 +237,6 @@ DB_FILE = "watchlist.csv"
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
     
-    # ФИКС ОШИБКИ TYPEERROR: Принудительно делаем эти колонки текстовыми (object)
-    # Чтобы pandas разрешил нам записывать туда проценты вроде "+15.00%"
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
         if col in df_watchlist.columns:
             df_watchlist[col] = df_watchlist[col].astype('object')
@@ -237,7 +246,6 @@ if os.path.exists(DB_FILE):
     if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
 else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-    # Сразу задаем тип данных
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
         df_watchlist[col] = df_watchlist[col].astype('object')
 
@@ -245,9 +253,14 @@ def save_db(df):
     df.to_csv(DB_FILE, index=False)
 
 # ==========================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (ОБНОВЛЕННЫЙ ДИЗАЙН)
 # ==========================================
-st.sidebar.markdown("### 🧭 Navigation")
+st.sidebar.markdown("""
+    <div style="text-align: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 20px;">
+        <h3 style="margin: 0; padding: 0; color: #ffffff;">Navigation</h3>
+    </div>
+""", unsafe_allow_html=True)
+
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
@@ -610,9 +623,14 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ DDM Assumptions")
-                div_0 = st.number_input("Current Annual Dividend per Share ($)", value=2.0, step=0.1, key=f"ddm_div_{selected_ticker}")
-                g_div = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=3.0, step=0.1, format="%f%%", key=f"ddm_g_{selected_ticker}") / 100
-                ke = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=8.0, step=0.5, format="%f%%", key=f"ddm_ke_{selected_ticker}") / 100
+                # ИСПОЛЬЗУЕМ СОХРАНЕННЫЕ ЗНАЧЕНИЯ ИЗ SESSION STATE
+                st.session_state.v_state['ddm_div'] = st.number_input("Current Annual Dividend per Share ($)", value=float(st.session_state.v_state['ddm_div']), step=0.1)
+                st.session_state.v_state['ddm_g'] = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(st.session_state.v_state['ddm_g']), step=0.1, format="%f%%")
+                st.session_state.v_state['ddm_ke'] = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(st.session_state.v_state['ddm_ke']), step=0.5, format="%f%%")
+                
+                div_0 = st.session_state.v_state['ddm_div']
+                g_div = st.session_state.v_state['ddm_g'] / 100
+                ke = st.session_state.v_state['ddm_ke'] / 100
             
             with col_results:
                 st.markdown("#### 📊 DDM Valuation")
@@ -631,7 +649,7 @@ elif app_mode == "Valuation Lab":
                         m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0), key=f"sync_ddm_{selected_ticker}"):
+                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0)):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
@@ -655,14 +673,21 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ DCF Assumptions")
-                fcf_base = st.number_input("Base Free Cash Flow (FCF) $M", value=1000.0, step=100.0, key=f"dcf_fcf_{selected_ticker}")
-                growth_rate = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=10.0, step=1.0, format="%f%%", key=f"dcf_g_{selected_ticker}") / 100
-                terminal_growth = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=2.5, step=0.1, format="%f%%", key=f"dcf_tg_{selected_ticker}") / 100
-                wacc = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=9.0, step=0.5, format="%f%%", key=f"dcf_wacc_{selected_ticker}") / 100
+                st.session_state.v_state['dcf_fcf'] = st.number_input("Base Free Cash Flow (FCF) $M", value=float(st.session_state.v_state['dcf_fcf']), step=100.0)
+                st.session_state.v_state['dcf_g'] = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=float(st.session_state.v_state['dcf_g']), step=1.0, format="%f%%")
+                st.session_state.v_state['dcf_tg'] = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=float(st.session_state.v_state['dcf_tg']), step=0.1, format="%f%%")
+                st.session_state.v_state['dcf_wacc'] = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=float(st.session_state.v_state['dcf_wacc']), step=0.5, format="%f%%")
                 
                 st.markdown("#### 🏢 Capital Structure")
-                shares_out_dcf = st.number_input("Shares Outstanding (Millions)", value=500.0, step=10.0, key=f"dcf_shares_{selected_ticker}")
-                net_debt_dcf = st.number_input("Net Debt $M (Total Debt - Cash)", value=2000.0, step=100.0, key=f"dcf_debt_{selected_ticker}")
+                st.session_state.v_state['dcf_shares'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['dcf_shares']), step=10.0)
+                st.session_state.v_state['dcf_debt'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(st.session_state.v_state['dcf_debt']), step=100.0)
+                
+                fcf_base = st.session_state.v_state['dcf_fcf']
+                growth_rate = st.session_state.v_state['dcf_g'] / 100
+                terminal_growth = st.session_state.v_state['dcf_tg'] / 100
+                wacc = st.session_state.v_state['dcf_wacc'] / 100
+                shares_out_dcf = st.session_state.v_state['dcf_shares']
+                net_debt_dcf = st.session_state.v_state['dcf_debt']
                 
             with col_results:
                 st.markdown("#### 📊 DCF Projections & Valuation")
@@ -698,7 +723,7 @@ elif app_mode == "Valuation Lab":
                 fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
                 st.plotly_chart(fig_dcf, use_container_width=True)
                 
-                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{selected_ticker}"):
+                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
@@ -722,23 +747,36 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ Comparable Assumptions")
-                metric_choice = st.selectbox("Choose Key Metric", ["Earnings per Share (EPS)", "EBITDA $M", "Revenue $M"], key=f"rel_choice_{selected_ticker}")
+                opts = ["Earnings per Share (EPS)", "EBITDA $M", "Revenue $M"]
+                idx = opts.index(st.session_state.v_state['rel_choice']) if st.session_state.v_state['rel_choice'] in opts else 0
+                st.session_state.v_state['rel_choice'] = st.selectbox("Choose Key Metric", opts, index=idx)
+                metric_choice = st.session_state.v_state['rel_choice']
                 
                 if metric_choice == "Earnings per Share (EPS)":
-                    base_metric = st.number_input("Company EPS ($)", value=5.0, step=0.5, key=f"rel_eps_{selected_ticker}")
-                    target_multiple = st.number_input("Target P/E Multiple (Industry Avg)", value=15.0, step=1.0, key=f"rel_pe_{selected_ticker}")
+                    st.session_state.v_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(st.session_state.v_state['rel_eps']), step=0.5)
+                    st.session_state.v_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(st.session_state.v_state['rel_pe']), step=1.0)
+                    base_metric = st.session_state.v_state['rel_eps']
+                    target_multiple = st.session_state.v_state['rel_pe']
                 elif metric_choice == "EBITDA $M":
-                    base_metric = st.number_input("Company EBITDA $M", value=500.0, step=50.0, key=f"rel_ebitda_{selected_ticker}")
-                    target_multiple = st.number_input("Target EV/EBITDA Multiple", value=10.0, step=1.0, key=f"rel_eveb_{selected_ticker}")
+                    st.session_state.v_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(st.session_state.v_state['rel_ebitda']), step=50.0)
+                    st.session_state.v_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(st.session_state.v_state['rel_eveb']), step=1.0)
                     st.markdown("#### 🏢 Capital Structure")
-                    shares_out_rel = st.number_input("Shares Outstanding (Millions)", value=100.0, step=10.0, key=f"rel_sh1_{selected_ticker}")
-                    net_debt_rel = st.number_input("Net Debt $M (Total Debt - Cash)", value=500.0, step=50.0, key=f"rel_nd1_{selected_ticker}")
+                    st.session_state.v_state['rel_sh1'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['rel_sh1']), step=10.0)
+                    st.session_state.v_state['rel_nd1'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(st.session_state.v_state['rel_nd1']), step=50.0)
+                    base_metric = st.session_state.v_state['rel_ebitda']
+                    target_multiple = st.session_state.v_state['rel_eveb']
+                    shares_out_rel = st.session_state.v_state['rel_sh1']
+                    net_debt_rel = st.session_state.v_state['rel_nd1']
                 else: # Revenue
-                    base_metric = st.number_input("Company Revenue $M", value=2000.0, step=100.0, key=f"rel_rev_{selected_ticker}")
-                    target_multiple = st.number_input("Target EV/Sales Multiple", value=4.0, step=0.5, key=f"rel_evs_{selected_ticker}")
+                    st.session_state.v_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(st.session_state.v_state['rel_rev']), step=100.0)
+                    st.session_state.v_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(st.session_state.v_state['rel_evs']), step=0.5)
                     st.markdown("#### 🏢 Capital Structure")
-                    shares_out_rel = st.number_input("Shares Outstanding (Millions)", value=100.0, step=10.0, key=f"rel_sh2_{selected_ticker}")
-                    net_debt_rel = st.number_input("Net Debt $M", value=500.0, step=50.0, key=f"rel_nd2_{selected_ticker}")
+                    st.session_state.v_state['rel_sh2'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['rel_sh2']), step=10.0)
+                    st.session_state.v_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd2']), step=50.0)
+                    base_metric = st.session_state.v_state['rel_rev']
+                    target_multiple = st.session_state.v_state['rel_evs']
+                    shares_out_rel = st.session_state.v_state['rel_sh2']
+                    net_debt_rel = st.session_state.v_state['rel_nd2']
 
             with col_results:
                 st.markdown("#### 📊 Relative Valuation")
@@ -767,7 +805,7 @@ elif app_mode == "Valuation Lab":
                     m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}")
                 
                 st.markdown("<br><br>", unsafe_allow_html=True)
-                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0), key=f"sync_rel_{selected_ticker}"):
+                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0)):
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
                     save_db(df_watchlist)
