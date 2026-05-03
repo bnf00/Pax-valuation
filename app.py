@@ -17,82 +17,20 @@ st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_st
 
 st.markdown("""
     <style>
-    /* Global Background and Text */
-    .stApp {
-        background-color: #0d1117;
-        color: #c9d1d9;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    
-    /* Container Padding */
-    .block-container { 
-        padding-top: 3rem !important; 
-        max-width: 95% !important;
-    }
-
-    /* Sleek Professional Tabs */
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 20px;
-        border-bottom: 1px solid #30363d;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent !important;
-        border: none !important;
-        border-bottom: 3px solid transparent !important;
-        border-radius: 0px !important;
-        padding: 10px 4px !important; 
-        height: auto !important;
-    }
-    .stTabs [data-baseweb="tab"] p { 
-        color: #8b949e !important; 
-        font-weight: 500 !important; 
-        font-size: 15px !important; 
-        margin: 0 !important; 
-    }
-    .stTabs [aria-selected="true"] { 
-        background-color: transparent !important; 
-        border-bottom: 3px solid #58a6ff !important; 
-    }
-    .stTabs [aria-selected="true"] p { 
-        color: #ffffff !important; 
-        font-weight: 600 !important;
-    }
+    .stApp { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .block-container { padding-top: 3rem !important; max-width: 95% !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid #30363d; }
+    .stTabs [data-baseweb="tab"] { background-color: transparent !important; border: none !important; border-bottom: 3px solid transparent !important; border-radius: 0px !important; padding: 10px 4px !important; height: auto !important; }
+    .stTabs [data-baseweb="tab"] p { color: #8b949e !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
+    .stTabs [aria-selected="true"] { background-color: transparent !important; border-bottom: 3px solid #58a6ff !important; }
+    .stTabs [aria-selected="true"] p { color: #ffffff !important; font-weight: 600 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
-
-    /* Elevated Metric Cards */
-    div[data-testid="metric-container"] {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    }
-    div[data-testid="metric-container"] label {
-        color: #8b949e !important;
-        font-weight: 500 !important;
-    }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        color: #ffffff !important;
-        font-weight: 700 !important;
-    }
-
-    /* Clean Dividers */
-    hr {
-        border-color: #30363d !important;
-        margin-top: 2rem;
-        margin-bottom: 2rem;
-    }
-    
-    /* Expander Styling */
-    .streamlit-expanderHeader {
-        background-color: transparent !important;
-        color: #58a6ff !important;
-        font-weight: 600 !important;
-    }
-    div[data-testid="stExpanderDetails"] {
-        border-left: 2px solid #30363d;
-        padding-left: 15px;
-    }
+    div[data-testid="metric-container"] { background-color: #161b22; border: 1px solid #30363d; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    div[data-testid="metric-container"] label { color: #8b949e !important; font-weight: 500 !important; }
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
+    hr { border-color: #30363d !important; margin-top: 2rem; margin-bottom: 2rem; }
+    .streamlit-expanderHeader { background-color: transparent !important; color: #58a6ff !important; font-weight: 600 !important; }
+    div[data-testid="stExpanderDetails"] { border-left: 2px solid #30363d; padding-left: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -100,16 +38,16 @@ st.markdown("""
 # RATIO EXPLANATIONS
 # ==========================================
 RATIO_EXPLANATIONS = {
-    "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations. A ratio > 1 indicates good financial health.",
-    "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory. A stricter measure of a company's ability to pay off current liabilities.",
-    "A/R Turnover": "Efficiency: Shows how effectively a company collects its debt. Higher turnover means faster collection from customers.",
-    "Inventory Turnover": "Efficiency: Shows how many times a company sold and replaced inventory over a period. Higher generally means strong sales.",
-    "Profit Margin": "Profitability: The percentage of revenue remaining as profit after all expenses, taxes, and costs are deducted.",
-    "Asset Turnover": "Efficiency: Measures the value of a company's sales or revenues relative to the value of its assets. Higher is better.",
-    "ROA": "Profitability (Return on Assets): Shows how profitable a company is relative to its total assets. Indicates management efficiency.",
-    "ROE": "Profitability (Return on Equity): Measures a corporation's profitability by revealing how much profit a company generates with the money shareholders have invested.",
-    "Debt to Assets": "Solvency: The proportion of a company's assets that are financed by debt. High ratio indicates higher financial risk.",
-    "Interest Earned": "Solvency (Times Interest Earned): Measures proportionate amount of income that can be used to cover interest expenses in the future. > 2.5 is usually safe."
+    "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
+    "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory.",
+    "A/R Turnover": "Efficiency: Shows how effectively a company collects its debt.",
+    "Inventory Turnover": "Efficiency: Shows how many times a company sold and replaced inventory.",
+    "Profit Margin": "Profitability: The percentage of revenue remaining as profit.",
+    "Asset Turnover": "Efficiency: Measures the value of sales relative to assets.",
+    "ROA": "Profitability (Return on Assets): Profitable relative to total assets.",
+    "ROE": "Profitability (Return on Equity): Profitable relative to shareholders equity.",
+    "Debt to Assets": "Solvency: Proportion of assets financed by debt.",
+    "Interest Earned": "Solvency: Ability to cover interest expenses."
 }
 
 # ==========================================
@@ -126,17 +64,14 @@ def search_company(query):
     if not query: return "", ""
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
             quotes = data.get('quotes', [])
             for q in quotes:
-                if q.get('quoteType') in ['EQUITY', 'ETF']:
-                    return q.get('symbol', query.upper()), q.get('shortname', query)
-            if quotes:
-                return quotes[0].get('symbol', query.upper()), quotes[0].get('shortname', query)
-    except Exception:
-        pass
+                if q.get('quoteType') in ['EQUITY', 'ETF']: return q.get('symbol', query.upper()), q.get('shortname', query)
+            if quotes: return quotes[0].get('symbol', query.upper()), quotes[0].get('shortname', query)
+    except Exception: pass
     return query.upper(), query
 
 def get_current_price(ticker):
@@ -170,7 +105,7 @@ def fetch_robust_news(ticker):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
     articles = []
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             xml_data = response.read()
             root = ET.fromstring(xml_data)
@@ -178,16 +113,14 @@ def fetch_robust_news(ticker):
                 title = item.find('title').text if item.find('title') is not None else "No Title"
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
-                if pub_date:
-                    pub_date = pub_date.replace(" +0000", "").replace(" GMT", "")
+                if pub_date: pub_date = pub_date.replace(" +0000", "").replace(" GMT", "")
                 articles.append({'title': title, 'link': link, 'date': pub_date})
-    except Exception:
-        pass
+    except Exception: pass
     return articles
 
 def find_intrinsic_values(df, is_relative=False):
-    target_keywords = ["intrinsic value", "fair value", "target price", "value per share", "implied price", "estimated value"]
-    if is_relative: target_keywords.extend(["average", "implied value", "relative value"])
+    target_keywords = ["intrinsic value", "fair value", "target price", "value per share", "implied price"]
+    if is_relative: target_keywords.extend(["average", "implied value"])
     results = {}
     for r in range(len(df)):
         for c in range(len(df.columns)):
@@ -204,7 +137,7 @@ def find_intrinsic_values(df, is_relative=False):
                 if row_vals:
                     if is_relative and len(row_vals) > 0:
                         final_val = sum(row_vals) / len(row_vals)
-                        label = "Consensus Target (Peer Average)" if cell_text_raw.lower() == "average" else (cell_text_raw if cell_text_raw else "Calculated Value")
+                        label = "Consensus Target" if cell_text_raw.lower() == "average" else (cell_text_raw if cell_text_raw else "Calculated Value")
                     else:
                         final_val = row_vals[0]
                         label = cell_text_raw if cell_text_raw else "Calculated Value"
@@ -224,8 +157,7 @@ def extract_relative_valuation_data(df):
         for r in range(min(5, len(df))):
             row_vals = [str(x) for x in df.iloc[r]]
             valid_vals = [x for x in row_vals if x.lower() not in ['nan', 'item', ''] and not x.lower().startswith('fy ') and len(x)>1]
-            if len(valid_vals) >= 2:
-                headers = row_vals; break
+            if len(valid_vals) >= 2: headers = row_vals; break
     results = []
     target_keywords = ["intrinsic value based on", "average", "implied value"]
     for r in range(len(df)):
@@ -239,7 +171,7 @@ def extract_relative_valuation_data(df):
                         num = float(str(val).replace('$', '').replace(',', '').strip())
                         if num > 0:
                             peer_name = headers[c].strip() if c < len(headers) else f"Competitor {c}"
-                            if peer_name.lower() not in ['nan', 'fy 2025', 'fy 2026', 'item', 'overvalued/undervalued by', '']:
+                            if peer_name.lower() not in ['nan', 'fy 2025', 'item', '']:
                                 row_data["Peers"][peer_name] = num
                 except ValueError: pass
             if row_data["Peers"]: results.append(row_data)
@@ -277,20 +209,81 @@ def extract_key_ratios(df):
                     except ValueError: results[key] = str(val) if str(val).strip() not in excel_errors else "N/A"
     return results
 
+# ==========================================
+# УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ (CSV)
+# ==========================================
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
-    df_watchlist.rename(columns={"Тикер": "Stock", "Название": "Company name", "Важность": "Interest", "Текущая цена": "Market price", "Справедливая цена": "Intrinsic value", "Потенциал": "Potential", "Файл": "File"}, inplace=True, errors='ignore')
-    cols_to_drop = [c for c in ["Status", "Shares", "Avg Cost"] if c in df_watchlist.columns]
-    if cols_to_drop: df_watchlist.drop(columns=cols_to_drop, inplace=True)
-    df_watchlist.replace({"✅ Yes": "Yes", "❌ No": "No", "✅ Есть": "Yes", "❌ Нет": "No"}, inplace=True)
-    if 'Potential' in df_watchlist.columns: df_watchlist['Potential'] = df_watchlist['Potential'].astype(str).str.replace('🟢 ', '').str.replace('🔴 ', '')
+    # Очистка старых данных
+    if 'File' in df_watchlist.columns: df_watchlist.drop(columns=['File'], inplace=True)
+    # Добавление новых колонок для портфеля
+    if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
+    if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
+    if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
 else:
-    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "File"])
+    df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
 
+# ==========================================
+# SIDEBAR (ВЫБОР КОМПАНИИ И ПОРТФЕЛЬ)
+# ==========================================
 selected_ticker = st.sidebar.selectbox("Active Company:", df_watchlist['Stock'].tolist()) if not df_watchlist.empty else None
 st.sidebar.markdown("---")
 
-# --- ИЗМЕНЕНО: Строгий типографический заголовок без эмблемы ---
+# --- БЛОК PORTFOLIO TRACKER ---
+st.sidebar.markdown("### 💼 My Portfolio")
+portfolio_df = df_watchlist[df_watchlist['In Portfolio'] == True]
+
+if not portfolio_df.empty:
+    total_value = 0.0
+    total_cost = 0.0
+    
+    for index, row in portfolio_df.iterrows():
+        st.sidebar.markdown(f"**{row['Stock']}**")
+        col1, col2 = st.sidebar.columns(2)
+        
+        # Инпуты для ввода данных прямо в сайдбаре
+        shares = col1.number_input("Shares", min_value=0.0, value=float(row['Shares']), step=1.0, key=f"sh_{row['Stock']}")
+        avg_cost = col2.number_input("Avg Cost ($)", min_value=0.0, value=float(row['Avg Cost']), step=1.0, key=f"co_{row['Stock']}")
+        
+        # Обновляем базу, если цифры изменились
+        if shares != row['Shares'] or avg_cost != row['Avg Cost']:
+            df_watchlist.loc[df_watchlist['Stock'] == row['Stock'], 'Shares'] = shares
+            df_watchlist.loc[df_watchlist['Stock'] == row['Stock'], 'Avg Cost'] = avg_cost
+            df_watchlist.to_csv(DB_FILE, index=False)
+            st.rerun()
+            
+        # Расчет P&L
+        try:
+            current_price = float(str(row['Market price']).replace('$', '').replace(',', ''))
+            value = shares * current_price
+            cost = shares * avg_cost
+            pnl = value - cost
+            pnl_pct = (pnl / cost * 100) if cost > 0 else 0.0
+            
+            total_value += value
+            total_cost += cost
+            
+            color = "#2ea043" if pnl >= 0 else "#f85149"
+            sign = "+" if pnl >= 0 else ""
+            st.sidebar.markdown(f"<div style='text-align: right; color:{color}; font-size:14px; font-weight: 600;'>{sign}${pnl:,.2f} ({sign}{pnl_pct:.2f}%)</div>", unsafe_allow_html=True)
+        except:
+            st.sidebar.caption("Price sync error")
+        st.sidebar.markdown("<hr style='margin: 10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
+        
+    st.sidebar.markdown("#### Total Value")
+    total_pnl = total_value - total_cost
+    total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
+    tot_color = "#2ea043" if total_pnl >= 0 else "#f85149"
+    tot_sign = "+" if total_pnl >= 0 else ""
+    st.sidebar.markdown(f"<h2 style='margin:0; padding:0;'>${total_value:,.2f}</h2>", unsafe_allow_html=True)
+    st.sidebar.markdown(f"<p style='color:{tot_color}; font-weight:600;'>{tot_sign}${total_pnl:,.2f} ({tot_sign}{total_pnl_pct:.2f}%)</p>", unsafe_allow_html=True)
+
+else:
+    st.sidebar.info("Your portfolio is empty. Tick the 'Portfolio' box in the Watchlist to add stocks here.")
+
+# ==========================================
+# MAIN INTERFACE
+# ==========================================
 def render_header():
     st.markdown("""
         <div style="margin-bottom: 20px;">
@@ -299,9 +292,6 @@ def render_header():
         </div>
     """, unsafe_allow_html=True)
 
-# ==========================================
-# 3. TOP MENU TABS
-# ==========================================
 tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
     "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
 ])
@@ -316,12 +306,11 @@ with tab_watchlist:
             with st.form("add_form", clear_on_submit=True):
                 nt = st.text_input("Company Name or Ticker (e.g., Tesla or TSLA)")
                 ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
-                
                 if st.form_submit_button("Add") and nt:
                     with st.spinner(f"Searching database for '{nt}'..."):
                         real_ticker, real_name = search_company(nt)
                         price = get_current_price(real_ticker)
-                        new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "File": "No"}])
+                        new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
                         df_watchlist.to_csv(DB_FILE, index=False)
                         st.rerun()
@@ -334,10 +323,7 @@ with tab_watchlist:
                 if up_file:
                     path = os.path.join(FILES_DIR, f"{upload_target}.xlsx")
                     with open(path, "wb") as f: f.write(up_file.getbuffer())
-                    df_watchlist.loc[df_watchlist['Stock']==upload_target, 'File'] = "Yes"
-                    df_watchlist.to_csv(DB_FILE, index=False)
                     st.success(f"File attached to {upload_target}!")
-                    st.rerun()
 
     with col_del:
         with st.expander("❌ Remove Company"):
@@ -355,8 +341,7 @@ with tab_watchlist:
     
     with st.expander("⚙️ Advanced Screener"):
         sc1, sc2 = st.columns(2)
-        with sc1:
-            filter_interest = st.multiselect("Filter by Interest:", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], default=[])
+        with sc1: filter_interest = st.multiselect("Filter by Interest:", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], default=[])
         with sc2:
             use_pot_filter = st.checkbox("Enable Minimum Potential Upside Filter")
             filter_potential = st.number_input("Minimum Upside (%)", value=0.0, step=5.0, disabled=not use_pot_filter)
@@ -372,8 +357,7 @@ with tab_watchlist:
                         df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
                 df_watchlist.to_csv(DB_FILE, index=False)
                 st.rerun()
-    with col_search:
-        search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
+    with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
 
     display_df = df_watchlist.copy()
     
@@ -381,8 +365,7 @@ with tab_watchlist:
         mask = display_df['Stock'].str.contains(search_query, case=False, na=False) | display_df['Company name'].str.contains(search_query, case=False, na=False)
         display_df = display_df[mask]
 
-    if filter_interest:
-        display_df = display_df[display_df['Interest'].isin(filter_interest)]
+    if filter_interest: display_df = display_df[display_df['Interest'].isin(filter_interest)]
         
     if use_pot_filter:
         def parse_potential(val):
@@ -393,11 +376,17 @@ with tab_watchlist:
         display_df = display_df[display_df['Num_Potential'] >= filter_potential]
         display_df.drop(columns=['Num_Potential'], inplace=True)
     
+    # --- ИЗМЕНЕНО: Настройка колонок в таблице ---
     edited_df = st.data_editor(
         display_df,
         use_container_width=True, hide_index=True,
-        column_config={"Interest": st.column_config.SelectboxColumn("Interest", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], required=True)},
-        disabled=["Stock", "Company name", "Market price", "Intrinsic value", "Potential", "File"]
+        column_config={
+            "Interest": st.column_config.SelectboxColumn("Interest", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], required=True),
+            "In Portfolio": st.column_config.CheckboxColumn("Portfolio", default=False),
+            "Shares": None, # Прячем технические колонки
+            "Avg Cost": None
+        },
+        disabled=["Stock", "Company name", "Market price", "Intrinsic value", "Potential"]
     )
     
     if not edited_df.equals(display_df):
@@ -425,29 +414,21 @@ with tab_profile:
                 try:
                     iv_float = float(str(iv_raw).replace('$', '').replace(',', ''))
                     if iv_float > 0:
-                        fig.add_hline(
-                            y=iv_float, line_dash="dash", line_color="#E04F5F", 
-                            annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", 
-                            annotation_position="bottom right", annotation_font_color="#E04F5F", annotation_font_size=12
-                        )
+                        fig.add_hline(y=iv_float, line_dash="dash", line_color="#E04F5F", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right", annotation_font_color="#E04F5F", annotation_font_size=12)
                 except: pass
                 fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig, use_container_width=True)
-                
         except: st.error("Error fetching chart data.")
         
         st.markdown("<hr>", unsafe_allow_html=True)
         st.subheader(f"📰 Recent News for {selected_ticker}")
         news_data = fetch_robust_news(selected_ticker)
-        
         if news_data:
             for article in news_data:
                 st.markdown(f"**[{article['title']}]({article['link']})**")
                 st.caption(f"Yahoo Finance RSS • {article['date']}")
                 st.markdown("<br>", unsafe_allow_html=True)
-        else:
-            st.info("No recent news found for this ticker.")
-            
+        else: st.info("No recent news found for this ticker.")
     else: st.warning("Select a company in the sidebar.")
 
 # --- PAGE 3: RATIOS ---
@@ -532,8 +513,7 @@ with tab_val_models:
                                 clean_peer = peer.replace('.1', '').replace('.2', '')
                                 if clean_peer.lower().startswith('unnamed'): clean_peer = f"Competitor {i+1}"
                                 with cols[i]:
-                                    if isinstance(current_p, (int, float)) and current_p > 0:
-                                        st.metric(label=f"Implied by {clean_peer}", value=f"${val:,.2f}", delta=f"{((val - current_p) / current_p) * 100:.2f}%")
+                                    if isinstance(current_p, (int, float)) and current_p > 0: st.metric(label=f"Implied by {clean_peer}", value=f"${val:,.2f}", delta=f"{((val - current_p) / current_p) * 100:.2f}%")
                                     else: st.metric(label=f"Implied by {clean_peer}", value=f"${val:,.2f}")
                             if st.button(f"Sync Average ({item['Metric']}): ${avg_val:,.2f}", key=f"sync_{selected_ticker}_{item['Metric']}"):
                                 df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = avg_val
@@ -550,8 +530,7 @@ with tab_val_models:
                             with mc1: st.metric(label=label, value=f"${val:,.2f}")
                             with mc2: st.metric(label="Market Price", value=f"${current_p}")
                             with mc3:
-                                if isinstance(current_p, (int, float)) and current_p > 0:
-                                    st.metric(label="Upside / Downside", value=f"{abs(((val - current_p) / current_p) * 100):.2f}%", delta=f"{((val - current_p) / current_p) * 100:.2f}%")
+                                if isinstance(current_p, (int, float)) and current_p > 0: st.metric(label="Upside / Downside", value=f"{abs(((val - current_p) / current_p) * 100):.2f}%", delta=f"{((val - current_p) / current_p) * 100:.2f}%")
                             if st.button(f"Sync '{label}' (${val:,.2f}) to Watchlist", key=f"sync_{selected_ticker}_{label}_{val}"):
                                 df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = val
                                 df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Market price'].values[0], val)
@@ -599,20 +578,12 @@ with tab_notes:
     if selected_ticker:
         st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
         st.write(f"Document your fundamental analysis, key risks, and buying rationale for **{selected_ticker}** below.")
-        
         note_path = os.path.join(NOTES_DIR, f"{selected_ticker}_notes.txt")
         existing_note = ""
         if os.path.exists(note_path):
             with open(note_path, "r", encoding="utf-8") as f: existing_note = f.read()
             
-        new_note = st.text_area(
-            "Editor (Markdown supported)", 
-            value=existing_note, 
-            height=500, 
-            label_visibility="collapsed",
-            placeholder="Example:\n\n### Bull Case\n* Strong moat in cloud computing.\n* Consistent 20%+ ROE over the last 5 years.\n\n### Bear Case\n* High valuation (P/E > 30).\n* Regulatory risks in Europe.\n\n**Action Plan:** Will initiate position if price drops below $120.",
-            key=f"note_editor_{selected_ticker}" 
-        )
+        new_note = st.text_area("Editor (Markdown supported)", value=existing_note, height=500, label_visibility="collapsed", key=f"note_editor_{selected_ticker}")
         
         if st.button("💾 Save Notes", type="primary", key=f"save_btn_{selected_ticker}"):
             with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
