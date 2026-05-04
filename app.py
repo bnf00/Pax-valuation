@@ -22,7 +22,7 @@ if 'v_state' not in st.session_state:
     st.session_state.v_state = {
         'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
         'dcf_fcf': 1000.0, 'dcf_g': 10.0, 'dcf_tg': 2.5, 'dcf_wacc': 9.0, 'dcf_shares': 500.0, 'dcf_debt': 2000.0,
-        'rel_choice': "Earnings per Share (EPS)",
+        'rel_choice': "Earnings per Share (EPS)", # Устарело, но оставим для совместимости
         'rel_eps': 5.0, 'rel_pe': 15.0,
         'rel_ebitda': 500.0, 'rel_eveb': 10.0, 'rel_sh1': 100.0, 'rel_nd1': 500.0,
         'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
@@ -111,7 +111,7 @@ if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
 # ---------------------------------------------------------
-# PDF 1: TERMINAL REPORT (Избавлен от Valuation Lab)
+# PDF 1: TERMINAL REPORT 
 # ---------------------------------------------------------
 def generate_full_pdf_report(ticker, df_watchlist, v_state):
     pdf = FPDF()
@@ -197,7 +197,7 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
     else:
         no_info()
 
-    # 3. VALUATION MODELS (Только из Excel)
+    # 3. VALUATION MODELS (Excel Models)
     section_title("3. Valuation Targets (Excel Models)")
     pdf.set_font("Arial", '', 11)
     if os.path.exists(path):
@@ -268,7 +268,7 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
     return pdf.output(dest='S').encode('latin-1')
 
 # ---------------------------------------------------------
-# PDF 2: VALUATION LAB REPORT (НОВЫЙ)
+# PDF 2: VALUATION LAB REPORT (УЛУЧШЕННЫЙ)
 # ---------------------------------------------------------
 def generate_valuation_pdf(ticker, v_state):
     pdf = FPDF()
@@ -351,60 +351,52 @@ def generate_valuation_pdf(ticker, v_state):
     add_row("Intrinsic Value per Share", f"${dcf_val:,.2f}", fill=False)
     pdf.ln(8)
 
-    # --- METHOD 3: RELATIVE ---
-    section_header("Method 3: Relative Valuation")
-    metric_choice = v_state.get('rel_choice', "Earnings per Share (EPS)")
+    # --- METHOD 3: RELATIVE VALUATION (ВСЕ МЕТОДЫ) ---
+    section_header("Method 3: Relative Valuation (Multiples)")
     
-    add_row("Inputs (Assumptions)", "", is_header=True)
-    add_row("Chosen Metric", metric_choice, fill=False)
-    
-    if metric_choice == "Earnings per Share (EPS)":
-        base_metric = v_state.get('rel_eps', 0)
-        target_multiple = v_state.get('rel_pe', 0)
-        intrinsic_value = base_metric * target_multiple
-        
-        add_row("Company EPS ($)", f"${base_metric:,.2f}", fill=True)
-        add_row("Target P/E Multiple", f"{target_multiple:,.2f}x", fill=False)
-        add_row("Outputs (Results)", "", is_header=True)
-        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
-        
-    elif metric_choice == "EBITDA $M":
-        base_metric = v_state.get('rel_ebitda', 0)
-        target_multiple = v_state.get('rel_eveb', 0)
-        shares_out_rel = v_state.get('rel_sh1', 1)
-        net_debt_rel = v_state.get('rel_nd1', 0)
-        implied_ev = base_metric * target_multiple
-        implied_equity = implied_ev - net_debt_rel
-        intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
-        
-        add_row("Company EBITDA ($M)", f"${base_metric:,.1f}", fill=True)
-        add_row("Target EV/EBITDA Multiple", f"{target_multiple:,.2f}x", fill=False)
-        add_row("Shares Outstanding (M)", f"{shares_out_rel:,.1f}", fill=True)
-        add_row("Net Debt ($M)", f"${net_debt_rel:,.1f}", fill=False)
-        
-        add_row("Outputs (Results)", "", is_header=True)
-        add_row("Implied Enterprise Value ($M)", f"${implied_ev:,.1f}", fill=False)
-        add_row("Implied Equity Value ($M)", f"${implied_equity:,.1f}", fill=True)
-        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
+    # 3A. EPS
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, "3A. Price-to-Earnings (P/E)", ln=True)
+    rel_eps = v_state.get('rel_eps', 0)
+    rel_pe = v_state.get('rel_pe', 0)
+    int_pe = rel_eps * rel_pe
+    add_row("Company EPS ($)", f"${rel_eps:,.2f}", fill=True)
+    add_row("Target P/E Multiple", f"{rel_pe:,.2f}x", fill=False)
+    add_row("Implied Value per Share", f"${int_pe:,.2f}", fill=True)
+    pdf.ln(5)
 
-    elif metric_choice == "Revenue $M":
-        base_metric = v_state.get('rel_rev', 0)
-        target_multiple = v_state.get('rel_evs', 0)
-        shares_out_rel = v_state.get('rel_sh2', 1)
-        net_debt_rel = v_state.get('rel_nd2', 0)
-        implied_ev = base_metric * target_multiple
-        implied_equity = implied_ev - net_debt_rel
-        intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
-        
-        add_row("Company Revenue ($M)", f"${base_metric:,.1f}", fill=True)
-        add_row("Target EV/Sales Multiple", f"{target_multiple:,.2f}x", fill=False)
-        add_row("Shares Outstanding (M)", f"{shares_out_rel:,.1f}", fill=True)
-        add_row("Net Debt ($M)", f"${net_debt_rel:,.1f}", fill=False)
-        
-        add_row("Outputs (Results)", "", is_header=True)
-        add_row("Implied Enterprise Value ($M)", f"${implied_ev:,.1f}", fill=False)
-        add_row("Implied Equity Value ($M)", f"${implied_equity:,.1f}", fill=True)
-        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
+    # 3B. EV/EBITDA
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, "3B. EV/EBITDA", ln=True)
+    rel_ebitda = v_state.get('rel_ebitda', 0)
+    rel_eveb = v_state.get('rel_eveb', 0)
+    sh_ebitda = v_state.get('rel_sh1', 1)
+    nd_ebitda = v_state.get('rel_nd1', 0)
+    ev_ebitda = rel_ebitda * rel_eveb
+    eq_ebitda = ev_ebitda - nd_ebitda
+    int_ebitda = eq_ebitda / sh_ebitda if sh_ebitda > 0 else 0
+    add_row("Company EBITDA ($M)", f"${rel_ebitda:,.1f}", fill=True)
+    add_row("Target EV/EBITDA Multiple", f"{rel_eveb:,.2f}x", fill=False)
+    add_row("Shares Outstanding (M)", f"{sh_ebitda:,.1f}", fill=True)
+    add_row("Net Debt ($M)", f"${nd_ebitda:,.1f}", fill=False)
+    add_row("Implied Value per Share", f"${int_ebitda:,.2f}", fill=True)
+    pdf.ln(5)
+
+    # 3C. EV/Sales
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, "3C. EV/Sales (Revenue)", ln=True)
+    rel_rev = v_state.get('rel_rev', 0)
+    rel_evs = v_state.get('rel_evs', 0)
+    sh_rev = v_state.get('rel_sh2', 1)
+    nd_rev = v_state.get('rel_nd2', 0)
+    ev_rev = rel_rev * rel_evs
+    eq_rev = ev_rev - nd_rev
+    int_rev = eq_rev / sh_rev if sh_rev > 0 else 0
+    add_row("Company Revenue ($M)", f"${rel_rev:,.1f}", fill=True)
+    add_row("Target EV/Sales Multiple", f"{rel_evs:,.2f}x", fill=False)
+    add_row("Shares Outstanding (M)", f"{sh_rev:,.1f}", fill=True)
+    add_row("Net Debt ($M)", f"${nd_rev:,.1f}", fill=False)
+    add_row("Implied Value per Share", f"${int_rev:,.2f}", fill=True)
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -786,7 +778,7 @@ if app_mode == "Terminal (Analysis)":
             except: st.error("Error fetching chart data.")
         else: st.warning("Your watchlist is empty.")
 
-    # --- PAGE 3: RATIOS (EXCEL + NWC) ---
+    # --- PAGE 3: RATIOS ---
     with tab_ratios:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Financial Ratios: {selected_ticker}")
@@ -953,7 +945,7 @@ if app_mode == "Terminal (Analysis)":
 
 
 # ==========================================
-# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД
+# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД 
 # ==========================================
 elif app_mode == "Macro Dashboard":
     render_header()
@@ -1085,7 +1077,7 @@ elif app_mode == "My Portfolio":
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: VALUATION LAB 
+# РОУТИНГ: VALUATION LAB (С ВЫВОДОМ ВСЕХ МЕТОДОВ ПОДРЯД)
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
@@ -1095,7 +1087,6 @@ elif app_mode == "Valuation Lab":
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
 
-        # ДОБАВЛЕНА КНОПКА ГЕНЕРАЦИИ PDF ОТЧЕТА VALUATION LAB
         col_title, col_pdf_btn = st.columns([3, 1])
         with col_title:
             st.write(f"Dynamic valuation models for **{selected_ticker}**.")
@@ -1239,86 +1230,104 @@ elif app_mode == "Valuation Lab":
             """, unsafe_allow_html=True)
 
         # ------------------------------------------
-        # МЕТОД 3: RELATIVE VALUATION
+        # МЕТОД 3: RELATIVE VALUATION (ВСЕ МЕТОДЫ ВЕРТИКАЛЬНО)
         # ------------------------------------------
         with tab_rel:
-            col_inputs, col_results = st.columns([1, 2], gap="large")
-            with col_inputs:
-                st.markdown("#### ⚙️ Comparable Assumptions")
-                opts = ["Earnings per Share (EPS)", "EBITDA $M", "Revenue $M"]
-                idx = opts.index(st.session_state.v_state['rel_choice']) if st.session_state.v_state['rel_choice'] in opts else 0
-                st.session_state.v_state['rel_choice'] = st.selectbox("Choose Key Metric", opts, index=idx)
-                metric_choice = st.session_state.v_state['rel_choice']
+            
+            # --- 3A. P/E ---
+            st.markdown("### 3A. Price-to-Earnings (P/E) Multiple")
+            c1, c2 = st.columns([1, 2], gap="large")
+            with c1:
+                st.session_state.v_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(st.session_state.v_state['rel_eps']), step=0.5)
+                st.session_state.v_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(st.session_state.v_state['rel_pe']), step=1.0)
+            with c2:
+                base_eps = st.session_state.v_state['rel_eps']
+                target_pe = st.session_state.v_state['rel_pe']
+                int_pe = base_eps * target_pe
+                st.info(f"**Formula:** Implied Share Price = EPS ({base_eps}) × Target P/E ({target_pe})")
                 
-                if metric_choice == "Earnings per Share (EPS)":
-                    st.session_state.v_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(st.session_state.v_state['rel_eps']), step=0.5)
-                    st.session_state.v_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(st.session_state.v_state['rel_pe']), step=1.0)
-                    base_metric = st.session_state.v_state['rel_eps']
-                    target_multiple = st.session_state.v_state['rel_pe']
-                elif metric_choice == "EBITDA $M":
-                    st.session_state.v_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(st.session_state.v_state['rel_ebitda']), step=50.0)
-                    st.session_state.v_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(st.session_state.v_state['rel_eveb']), step=1.0)
-                    st.markdown("#### 🏢 Capital Structure")
-                    st.session_state.v_state['rel_sh1'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['rel_sh1']), step=10.0)
-                    st.session_state.v_state['rel_nd1'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(st.session_state.v_state['rel_nd1']), step=50.0)
-                    base_metric = st.session_state.v_state['rel_ebitda']
-                    target_multiple = st.session_state.v_state['rel_eveb']
-                    shares_out_rel = st.session_state.v_state['rel_sh1']
-                    net_debt_rel = st.session_state.v_state['rel_nd1']
-                else: # Revenue
-                    st.session_state.v_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(st.session_state.v_state['rel_rev']), step=100.0)
-                    st.session_state.v_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(st.session_state.v_state['rel_evs']), step=0.5)
-                    st.markdown("#### 🏢 Capital Structure")
-                    st.session_state.v_state['rel_sh2'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['rel_sh2']), step=10.0)
-                    st.session_state.v_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd2']), step=50.0)
-                    base_metric = st.session_state.v_state['rel_rev']
-                    target_multiple = st.session_state.v_state['rel_evs']
-                    shares_out_rel = st.session_state.v_state['rel_sh2']
-                    net_debt_rel = st.session_state.v_state['rel_nd2']
-
-            with col_results:
-                st.markdown("#### 📊 Relative Valuation")
-                
-                if metric_choice == "Earnings per Share (EPS)":
-                    intrinsic_value = base_metric * target_multiple
-                    st.info(f"**Formula:** Implied Share Price = EPS ({base_metric}) × Target P/E ({target_multiple})")
-                
-                elif metric_choice == "EBITDA $M":
-                    implied_ev = base_metric * target_multiple
-                    implied_equity = implied_ev - net_debt_rel
-                    intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
-                    st.info(f"**Formula:** Implied EV = EBITDA ({base_metric}) × EV/EBITDA ({target_multiple}) = {implied_ev} M<br>Equity Value = EV ({implied_ev}) - Net Debt ({net_debt_rel}) = {implied_equity} M")
-                    
-                elif metric_choice == "Revenue $M":
-                    implied_ev = base_metric * target_multiple
-                    implied_equity = implied_ev - net_debt_rel
-                    intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
-                    st.info(f"**Formula:** Implied EV = Revenue ({base_metric}) × EV/Sales ({target_multiple}) = {implied_ev} M<br>Equity Value = EV ({implied_ev}) - Net Debt ({net_debt_rel}) = {implied_equity} M")
-
-                m1, m2 = st.columns(2)
+                m1, _ = st.columns(2)
                 if current_p > 0:
-                    upside = ((intrinsic_value - current_p) / current_p) * 100
-                    m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+                    upside_pe = ((int_pe - current_p) / current_p) * 100
+                    m1.metric("Implied Value per Share", f"${int_pe:,.2f}", f"{upside_pe:+.2f}% Upside", delta_color="normal")
                 else:
-                    m1.metric("Implied Value per Share", f"${intrinsic_value:,.2f}")
+                    m1.metric("Implied Value per Share", f"${int_pe:,.2f}")
                 
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                if st.button("💾 Sync Relative Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value<=0), key=f"sync_rel_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
+                if st.button("💾 Sync P/E Value to Watchlist", type="primary", use_container_width=True, disabled=(int_pe<=0), key=f"sync_pe_{selected_ticker}"):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_pe
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_pe)
                     save_db(df_watchlist)
-                    st.success(f"Watchlist updated!")
+                    st.success(f"Watchlist updated with P/E method!")
+            
+            st.markdown("<hr>", unsafe_allow_html=True)
 
-            st.markdown("""
-                <div class="guide-box">
-                    <h4>💡 Шпаргалка аналитика: Relative Valuation (Мультипликаторы)</h4>
-                    <ul>
-                        <li><b>P/E (Price to Earnings):</b> Подходит для стабильно прибыльных компаний. Не применять, если прибыль искажена разовыми факторами.</li>
-                        <li><b>EV/EBITDA:</b> Отличный универсальный показатель. Нивелирует разницу в долгах и налогах. Идеален для заводов и телекомов.</li>
-                        <li><b>EV/Sales:</b> Используется для SaaS, стартапов и компаний, которые активно реинвестируют всё в рост и пока не имеют чистой прибыли.</li>
-                    </ul>
-                </div>
-            """, unsafe_allow_html=True)
+            # --- 3B. EV/EBITDA ---
+            st.markdown("### 3B. EV/EBITDA Multiple")
+            c1, c2 = st.columns([1, 2], gap="large")
+            with c1:
+                st.session_state.v_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(st.session_state.v_state['rel_ebitda']), step=50.0)
+                st.session_state.v_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(st.session_state.v_state['rel_eveb']), step=1.0)
+                st.session_state.v_state['rel_sh1'] = st.number_input("Shares Outstanding (M)", value=float(st.session_state.v_state['rel_sh1']), step=10.0, key="sh_ebitda")
+                st.session_state.v_state['rel_nd1'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd1']), step=50.0, key="nd_ebitda")
+            with c2:
+                base_ebitda = st.session_state.v_state['rel_ebitda']
+                target_eveb = st.session_state.v_state['rel_eveb']
+                sh_ebitda = st.session_state.v_state['rel_sh1']
+                nd_ebitda = st.session_state.v_state['rel_nd1']
+                
+                ev_ebitda = base_ebitda * target_eveb
+                eq_ebitda = ev_ebitda - nd_ebitda
+                int_ebitda = eq_ebitda / sh_ebitda if sh_ebitda > 0 else 0
+                
+                st.info(f"**Formula:** Implied EV = EBITDA ({base_ebitda}) × EV/EBITDA ({target_eveb}) = {ev_ebitda} M<br>Equity Value = EV ({ev_ebitda}) - Net Debt ({nd_ebitda}) = {eq_ebitda} M")
+                
+                m1, _ = st.columns(2)
+                if current_p > 0:
+                    upside_eb = ((int_ebitda - current_p) / current_p) * 100
+                    m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}", f"{upside_eb:+.2f}% Upside", delta_color="normal")
+                else:
+                    m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}")
+                
+                if st.button("💾 Sync EV/EBITDA Value to Watchlist", type="primary", use_container_width=True, disabled=(int_ebitda<=0), key=f"sync_eveb_{selected_ticker}"):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_ebitda
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_ebitda)
+                    save_db(df_watchlist)
+                    st.success(f"Watchlist updated with EV/EBITDA method!")
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+            
+            # --- 3C. EV/Sales ---
+            st.markdown("### 3C. EV/Sales (Revenue) Multiple")
+            c1, c2 = st.columns([1, 2], gap="large")
+            with c1:
+                st.session_state.v_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(st.session_state.v_state['rel_rev']), step=100.0)
+                st.session_state.v_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(st.session_state.v_state['rel_evs']), step=0.5)
+                st.session_state.v_state['rel_sh2'] = st.number_input("Shares Outstanding (M)", value=float(st.session_state.v_state['rel_sh2']), step=10.0, key="sh_rev")
+                st.session_state.v_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd2']), step=50.0, key="nd_rev")
+            with c2:
+                base_rev = st.session_state.v_state['rel_rev']
+                target_evs = st.session_state.v_state['rel_evs']
+                sh_rev = st.session_state.v_state['rel_sh2']
+                nd_rev = st.session_state.v_state['rel_nd2']
+                
+                ev_rev = base_rev * target_evs
+                eq_rev = ev_rev - nd_rev
+                int_rev = eq_rev / sh_rev if sh_rev > 0 else 0
+                
+                st.info(f"**Formula:** Implied EV = Revenue ({base_rev}) × EV/Sales ({target_evs}) = {ev_rev} M<br>Equity Value = EV ({ev_rev}) - Net Debt ({nd_rev}) = {eq_rev} M")
+                
+                m1, _ = st.columns(2)
+                if current_p > 0:
+                    upside_rev = ((int_rev - current_p) / current_p) * 100
+                    m1.metric("Implied Value per Share", f"${int_rev:,.2f}", f"{upside_rev:+.2f}% Upside", delta_color="normal")
+                else:
+                    m1.metric("Implied Value per Share", f"${int_rev:,.2f}")
+                
+                if st.button("💾 Sync EV/Sales Value to Watchlist", type="primary", use_container_width=True, disabled=(int_rev<=0), key=f"sync_evs_{selected_ticker}"):
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_rev
+                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_rev)
+                    save_db(df_watchlist)
+                    st.success(f"Watchlist updated with EV/Sales method!")
 
     else:
         st.warning("Your watchlist is empty. Add a company in the Terminal first.")
