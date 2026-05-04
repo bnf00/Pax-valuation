@@ -9,6 +9,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import json
 import base64
+from fpdf import FPDF  # НОВАЯ БИБЛИОТЕКА ДЛЯ PDF
 
 # ==========================================
 # 1. PAGE CONFIG & PREMIUM CSS DESIGN
@@ -27,7 +28,7 @@ if 'v_state' not in st.session_state:
     }
 
 # ==========================================
-# ОПТИМИЗАЦИЯ 1: КЭШИРОВАНИЕ ФОНА
+# BACKGROUND IMAGE INJECTION
 # ==========================================
 @st.cache_data
 def get_base64_bg(file_path):
@@ -87,19 +88,15 @@ div[data-testid="stDataFrame"] { background-color: transparent !important; }
 st.markdown(css_code, unsafe_allow_html=True)
 
 # ==========================================
-# RATIO EXPLANATIONS & ОПТИМИЗИРОВАННЫЕ ФУНКЦИИ
+# CORE FUNCTIONS & PDF GENERATOR
 # ==========================================
 RATIO_EXPLANATIONS = {
-    "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
-    "ACID-Test Ratio": "Liquidity: Similar to Current Ratio, but excludes inventory.",
-    "A/R Turnover": "Efficiency: Shows how effectively a company collects its debt.",
-    "Inventory Turnover": "Efficiency: Shows how many times a company sold and replaced inventory.",
-    "Profit Margin": "Profitability: The percentage of revenue remaining as profit.",
-    "Asset Turnover": "Efficiency: Measures the value of sales relative to assets.",
-    "ROA": "Profitability (Return on Assets): Profitable relative to total assets.",
-    "ROE": "Profitability (Return on Equity): Profitable relative to shareholders equity.",
-    "Debt to Assets": "Solvency: Proportion of assets financed by debt.",
-    "Interest Earned": "Solvency: Ability to cover interest expenses."
+    "Profit Margin": "Percentage of revenue remaining as profit. Higher is better.",
+    "ROA": "Return on Assets: Efficiency in generating profit from assets.",
+    "ROE": "Return on Equity: Efficiency in generating profit from shareholders' equity.",
+    "Debt to Equity": "Solvency: Proportion of company financed by debt vs. equity.",
+    "Current Ratio": "Liquidity: Ability to pay short-term obligations (Target: > 1.0).",
+    "Net Working Capital": "Absolute liquidity measure: Current Assets minus Current Liabilities."
 }
 
 FILES_DIR = "analyses"
@@ -107,7 +104,48 @@ NOTES_DIR = "notes"
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
-@st.cache_data(ttl=3600) # Кэшируем поиск компаний на час
+# --- НОВАЯ ФУНКЦИЯ ДЛЯ ГЕНЕРАЦИИ PDF ---
+def generate_pdf_report(ticker, current_price, intrinsic_value, notes):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font("Arial", 'B', 20)
+    pdf.set_text_color(212, 175, 55) # Gold color
+    pdf.cell(0, 15, f"Pax Investment Report: {ticker}", 0, 1, 'C')
+    pdf.line(10, 25, 200, 25)
+    pdf.ln(10)
+    
+    # Financial Data
+    pdf.set_font("Arial", 'B', 14)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 10, "Valuation Summary", 0, 1)
+    
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(50, 10, "Market Price:", 0, 0)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, str(current_price), 0, 1)
+    
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(50, 10, "Intrinsic Value:", 0, 0)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"${intrinsic_value:,.2f}" if isinstance(intrinsic_value, (int, float)) else str(intrinsic_value), 0, 1)
+    pdf.ln(10)
+    
+    # Analyst Notes
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "Analyst Notes & Thesis", 0, 1)
+    pdf.set_font("Arial", '', 11)
+    
+    # Encode notes to avoid character issues in basic FPDF
+    clean_notes = notes.encode('latin-1', 'replace').decode('latin-1') if notes else "No notes provided."
+    pdf.multi_cell(0, 8, clean_notes)
+    
+    # Return as bytes
+    return pdf.output(dest='S').encode('latin-1')
+# ---------------------------------------
+
+@st.cache_data(ttl=3600)
 def search_company(query):
     query = str(query).strip()
     if not query: return "", ""
@@ -123,7 +161,6 @@ def search_company(query):
     except Exception: pass
     return query.upper(), query
 
-# ОПТИМИЗАЦИЯ 2: Кэшируем текущую цену на 15 минут
 @st.cache_data(ttl=900)
 def get_current_price(ticker):
     try:
@@ -145,18 +182,6 @@ def calculate_potential(current_price_str, fair_value):
     except: pass
     return "N/A"
 
-def clean_excel_data(df):
-    def format_cell(x):
-        if pd.isna(x) or str(x).strip() in ['#DIV/0!', '#VALUE!', '#N/A', 'None', '#REF!', '']: return '-'
-        try:
-            num = float(x)
-            if abs(num) >= 1000: return f"{num:,.0f}".replace(',', ' ')
-            if abs(num) > 0: return f"{num:.4f}"
-            return "0"
-        except: return str(x)
-    return df.map(format_cell) if hasattr(df, 'map') else df.applymap(format_cell)
-
-# ОПТИМИЗАЦИЯ 3: Кэшируем новости на 1 час
 @st.cache_data(ttl=3600)
 def fetch_robust_news(ticker):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
@@ -174,6 +199,60 @@ def fetch_robust_news(ticker):
                 articles.append({'title': title, 'link': link, 'date': pub_date})
     except Exception: pass
     return articles
+
+@st.cache_data(ttl=86400)
+def fetch_live_financials(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        bs = stock.balance_sheet
+        inc = stock.financials
+        if bs.empty or inc.empty: return None, None
+            
+        latest_bs_col = bs.columns[0]
+        latest_inc_col = inc.columns[0]
+        
+        def get_metric(df, col_name, date_col):
+            try: return float(df.loc[col_name, date_col])
+            except: return 0.0
+
+        revenue = get_metric(inc, 'Total Revenue', latest_inc_col)
+        net_income = get_metric(inc, 'Net Income', latest_inc_col)
+        total_assets = get_metric(bs, 'Total Assets', latest_bs_col)
+        total_equity = get_metric(bs, 'Stockholders Equity', latest_bs_col)
+        if total_equity == 0: total_equity = get_metric(bs, 'Total Equity Gross Minority Interest', latest_bs_col)
+        total_debt = get_metric(bs, 'Total Debt', latest_bs_col)
+        current_assets = get_metric(bs, 'Current Assets', latest_bs_col)
+        current_liabilities = get_metric(bs, 'Current Liabilities', latest_bs_col)
+        
+        ratios = {}
+        ratios['Profit Margin'] = (net_income / revenue * 100) if revenue else 0
+        ratios['ROA'] = (net_income / total_assets * 100) if total_assets else 0
+        ratios['ROE'] = (net_income / total_equity * 100) if total_equity else 0
+        ratios['Debt to Equity'] = (total_debt / total_equity) if total_equity else 0
+        ratios['Current Ratio'] = (current_assets / current_liabilities) if current_liabilities else 0
+        ratios['Net Working Capital'] = current_assets - current_liabilities
+        
+        formatted = {
+            "Profit Margin": f"{ratios['Profit Margin']:.2f}%",
+            "ROA": f"{ratios['ROA']:.2f}%",
+            "ROE": f"{ratios['ROE']:.2f}%",
+            "Debt to Equity": f"{ratios['Debt to Equity']:.2f}",
+            "Current Ratio": f"{ratios['Current Ratio']:.2f}",
+            "Net Working Capital": f"${ratios['Net Working Capital']:,.0f}" if ratios['Net Working Capital'] != 0 else "N/A"
+        }
+        return formatted, str(latest_inc_col.year)
+    except Exception: return None, None
+
+def clean_excel_data(df):
+    def format_cell(x):
+        if pd.isna(x) or str(x).strip() in ['#DIV/0!', '#VALUE!', '#N/A', 'None', '#REF!', '']: return '-'
+        try:
+            num = float(x)
+            if abs(num) >= 1000: return f"{num:,.0f}".replace(',', ' ')
+            if abs(num) > 0: return f"{num:.4f}"
+            return "0"
+        except: return str(x)
+    return df.map(format_cell) if hasattr(df, 'map') else df.applymap(format_cell)
 
 def find_intrinsic_values(df, is_relative=False):
     target_keywords = ["intrinsic value", "fair value", "target price", "value per share", "implied price"]
@@ -234,38 +313,6 @@ def extract_relative_valuation_data(df):
             if row_data["Peers"]: results.append(row_data)
     return results
 
-def extract_key_ratios(df):
-    target_ratios = {
-        "Current Ratio": ["current ratio"], "ACID-Test Ratio": ["acid-test", "quick ratio"],
-        "A/R Turnover": ["receivable turnover"], "Inventory Turnover": ["inventory turnover"],
-        "Profit Margin": ["profit margin"], "Asset Turnover": ["asset turnover"],
-        "ROA": ["return on assets", "roa"], "ROE": ["return on ordinary shareholders", "roe"],
-        "Debt to Assets": ["debt to total assets"], "Interest Earned": ["times interest earned"]
-    }
-    latest_year_col = None; max_year = -1
-    for col in df.columns:
-        match = re.search(r'(20\d{2})', str(col).strip())
-        if match:
-            year = int(match.group(1))
-            if year > max_year: max_year = year; latest_year_col = col
-    if latest_year_col is None: latest_year_col = df.columns[-1]
-    results = {"_latest_year": str(max_year) if max_year != -1 else str(latest_year_col)}
-    excel_errors = ['-', '', '#DIV/0!', '#VALUE!', '#N/A', '#REF!', 'None', 'nan']
-    for r in range(len(df)):
-        row_name = str(df.iloc[r, 0]).strip().lower()
-        for key, aliases in target_ratios.items():
-            if key not in results and any(alias in row_name for alias in aliases):
-                val = df.loc[r, latest_year_col]
-                if pd.isna(val) or str(val).strip() in excel_errors: results[key] = "N/A"
-                else:
-                    try:
-                        val_str = str(val).replace(',', '').replace('%', '').strip()
-                        num = float(val_str)
-                        is_percentage = any(word in key.lower() for word in ['margin', 'roa', 'roe', 'debt'])
-                        results[key] = f"{num*100:.2f}%" if ('%' in str(val) or is_percentage) and num < 2 and '%' not in str(val) else (f"{num:.2f}%" if '%' in str(val) or is_percentage else f"{num:.2f}")
-                    except ValueError: results[key] = str(val) if str(val).strip() not in excel_errors else "N/A"
-    return results
-
 # ==========================================
 # ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ
 # ==========================================
@@ -296,7 +343,8 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
+# ДОБАВЛЕН НОВЫЙ РАЗДЕЛ "Macro Dashboard"
+app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "Macro Dashboard", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
     st.markdown("""
@@ -378,16 +426,12 @@ if app_mode == "Terminal (Analysis)":
         
         col_btn, col_search = st.columns([1, 4])
         with col_btn:
-            # ОПТИМИЗАЦИЯ 4: Быстрое (пакетное) обновление цен
             if st.button("🔄 Update Market Data", use_container_width=True):
                 with st.spinner('Fetching live prices...'):
-                    # Принудительно очищаем кэш цен перед обновлением
                     get_current_price.clear()
-                    
                     tickers_list = df_watchlist['Stock'].tolist()
                     if tickers_list:
                         try:
-                            # Пытаемся скачать данные списком (может быть быстрее)
                             data = yf.download(tickers_list, period="1d", progress=False)
                             if not data.empty and 'Close' in data:
                                 close_data = data['Close']
@@ -400,14 +444,12 @@ if app_mode == "Terminal (Analysis)":
                                         elif isinstance(close_data, pd.Series): 
                                             p = round(float(close_data.dropna().iloc[-1]), 2)
                                     except:
-                                        # Резервный вариант, если yf.download отдал странный формат
                                         p = get_current_price(ticker)
                                         
                                     if isinstance(p, (float, int)):
                                         df_watchlist.at[i, 'Market price'] = f"${p}"
                                         df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
                         except:
-                            # Полный фоллбэк: загружаем по одному, если yf.download упал
                             for i, r in df_watchlist.iterrows():
                                 p = get_current_price(r['Stock'])
                                 if isinstance(p, float):
@@ -480,25 +522,25 @@ if app_mode == "Terminal (Analysis)":
     # --- PAGE 3: RATIOS ---
     with tab_ratios:
         if selected_ticker and selected_ticker != "":
-            st.subheader(f"Financial Ratios: {selected_ticker}")
-            path = os.path.join(FILES_DIR, f"{selected_ticker}.xlsx")
-            if os.path.exists(path):
-                xls = pd.ExcelFile(path)
-                if 'Ratios' in xls.sheet_names:
-                    df = pd.read_excel(path, sheet_name='Ratios')
-                    key_metrics = extract_key_ratios(df)
-                    if key_metrics:
-                        latest_year = key_metrics.pop("_latest_year", "Latest")
-                        st.write(f"**Key Performance Indicators ({latest_year})**")
-                        cols = st.columns(5)
-                        for i, (name, val) in enumerate(key_metrics.items()):
-                            tooltip_text = RATIO_EXPLANATIONS.get(name, "Financial Metric")
-                            with cols[i % 5]: st.metric(label=name, value=val, help=tooltip_text)
-                            if (i + 1) % 5 == 0: st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("<hr>", unsafe_allow_html=True)
-                    with st.expander("View Full Raw Data", expanded=not bool(key_metrics)): st.dataframe(clean_excel_data(df), use_container_width=True, height=(len(df)*35)+40)
-                else: st.error("Sheet 'Ratios' not found.")
-            else: st.info("No file attached for this company.")
+            st.subheader(f"Live Financial Ratios: {selected_ticker}")
+            
+            with st.spinner("Fetching latest financials from SEC/Yahoo..."):
+                ratios, latest_year = fetch_live_financials(selected_ticker)
+            
+            if ratios:
+                st.write(f"**Key Performance Indicators (Auto-Generated for {latest_year})**")
+                cols = st.columns(3)
+                idx = 0
+                for name, val in ratios.items():
+                    tooltip_text = RATIO_EXPLANATIONS.get(name, "Financial Metric")
+                    with cols[idx % 3]: 
+                        st.metric(label=name, value=val, help=tooltip_text)
+                    idx += 1
+                st.markdown("<br>", unsafe_allow_html=True)
+            else:
+                st.warning("Could not fetch live financial data for this company. The ticker might be invalid or data is missing on Yahoo Finance.")
+        else:
+            st.info("Your watchlist is empty.")
             
     # --- PAGE 4: VALUATION MODELS (From Excel) ---
     with tab_val_models:
@@ -559,7 +601,7 @@ if app_mode == "Terminal (Analysis)":
                     st.markdown("<hr>", unsafe_allow_html=True)
                     with st.expander("View Raw Calculation Data (Full Spreadsheet)"): st.dataframe(clean_excel_data(df), use_container_width=True, height=500)
                 else: st.warning("No Valuation models found in this file.")
-            else: st.info("No file attached.")
+            else: st.info("No Excel models attached. You can now rely on the Valuation Lab for calculations.")
 
     # --- PAGE 5: COMPARE ---
     with tab_compare:
@@ -572,29 +614,18 @@ if app_mode == "Terminal (Analysis)":
                 with st.spinner('Compiling fundamental data...'):
                     for t in tickers_to_compare:
                         row = df_watchlist[df_watchlist['Stock'] == t]
-                        
                         iv_val = row['Intrinsic value'].values[0] if not row.empty else "N/A"
-                        try:
-                            formatted_iv = f"${float(iv_val):,.2f}" if pd.notna(iv_val) and iv_val != "" else "N/A"
-                        except:
-                            formatted_iv = "N/A"
+                        try: formatted_iv = f"${float(iv_val):,.2f}" if pd.notna(iv_val) and iv_val != "" else "N/A"
+                        except: formatted_iv = "N/A"
                             
                         comp_info = {
                             "Market Price": str(row['Market price'].values[0]) if not row.empty else "N/A", 
                             "Intrinsic Value": formatted_iv, 
                             "Potential": str(row['Potential'].values[0]) if not row.empty else "N/A"
                         }
-                        
-                        path = os.path.join(FILES_DIR, f"{t}.xlsx")
-                        if os.path.exists(path):
-                            try:
-                                xls = pd.ExcelFile(path)
-                                if 'Ratios' in xls.sheet_names:
-                                    df_r = pd.read_excel(path, sheet_name='Ratios')
-                                    ratios = extract_key_ratios(df_r)
-                                    ratios.pop("_latest_year", None)
-                                    comp_info.update(ratios)
-                            except: pass
+                        live_ratios, _ = fetch_live_financials(t)
+                        if live_ratios:
+                            comp_info.update(live_ratios)
                         compare_data[t] = comp_info
                 df_compare = pd.DataFrame(compare_data); df_compare.fillna("N/A", inplace=True)
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -602,23 +633,106 @@ if app_mode == "Terminal (Analysis)":
             else: st.info("Select at least one company to see the comparison.")
         else: st.info("Your watchlist is empty. Add companies first.")
 
-    # --- PAGE 6: NOTES ---
+    # --- PAGE 6: NOTES & PDF EXPORT ---
     with tab_notes:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
-            st.write(f"Document your fundamental analysis, key risks, and buying rationale for **{selected_ticker}** below.")
             note_path = os.path.join(NOTES_DIR, f"{selected_ticker}_notes.txt")
             existing_note = ""
             if os.path.exists(note_path):
                 with open(note_path, "r", encoding="utf-8") as f: existing_note = f.read()
                 
-            new_note = st.text_area("Editor (Markdown supported)", value=existing_note, height=500, label_visibility="collapsed", key=f"note_editor_{selected_ticker}")
+            new_note = st.text_area("Editor", value=existing_note, height=400, label_visibility="collapsed", key=f"note_editor_{selected_ticker}")
             
-            if st.button("💾 Save Notes", type="primary", key=f"save_btn_{selected_ticker}"):
-                with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
-                st.success("Investment notes saved securely!")
+            col_save, col_pdf = st.columns([1, 1])
+            with col_save:
+                if st.button("💾 Save Notes", type="primary", use_container_width=True, key=f"save_btn_{selected_ticker}"):
+                    with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
+                    st.success("Investment notes saved securely!")
+            
+            with col_pdf:
+                # ГЕНЕРАЦИЯ PDF ПРИ НАЖАТИИ
+                current_p = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
+                int_val = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Intrinsic value'].values[0]
+                
+                pdf_bytes = generate_pdf_report(selected_ticker, current_p, int_val, new_note)
+                
+                st.download_button(
+                    label="📥 Export PDF Report",
+                    data=pdf_bytes,
+                    file_name=f"{selected_ticker}_Pax_Report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
         else:
             st.warning("Your watchlist is empty.")
+
+# ==========================================
+# НОВЫЙ РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД
+# ==========================================
+elif app_mode == "Macro Dashboard":
+    render_header()
+    st.subheader("🌍 Macroeconomic & Market Overview")
+    
+    macro_symbols = {
+        "S&P 500": "^GSPC",
+        "NASDAQ": "^IXIC",
+        "Volatility (VIX)": "^VIX",
+        "10-Yr Treasury Yield": "^TNX"
+    }
+    
+    @st.cache_data(ttl=3600) # Кэшируем макро-данные на час
+    def fetch_macro_data():
+        hist_data = {}
+        current_data = {}
+        for name, symbol in macro_symbols.items():
+            try:
+                tk = yf.Ticker(symbol)
+                hist = tk.history(period="1y")
+                if not hist.empty:
+                    hist_data[name] = hist['Close']
+                    current_price = hist['Close'].iloc[-1]
+                    prev_price = hist['Close'].iloc[-2]
+                    pct_change = ((current_price - prev_price) / prev_price) * 100
+                    
+                    if symbol == "^TNX": # Доходность измеряется в процентах
+                        current_data[name] = {"val": f"{current_price:.2f}%", "change": f"{pct_change:+.2f}%"}
+                    else:
+                        current_data[name] = {"val": f"{current_price:,.2f}", "change": f"{pct_change:+.2f}%"}
+            except:
+                pass
+        return hist_data, current_data
+
+    with st.spinner("Fetching global market data..."):
+        macro_hist, macro_current = fetch_macro_data()
+        
+    if macro_current:
+        # Рисуем карточки-метрики
+        cols = st.columns(4)
+        for i, (name, data) in enumerate(macro_current.items()):
+            # Инвертируем цвета для VIX (падение VIX = хорошо = зеленый)
+            delta_col = "inverse" if name == "Volatility (VIX)" else "normal"
+            cols[i].metric(name, data['val'], data['change'], delta_color=delta_col)
+            
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        # Рисуем графики трендов за год
+        st.write("### 1-Year Market Trends")
+        c1, c2 = st.columns(2)
+        
+        def plot_sparkline(series, title, color):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=series.index, y=series.values, mode='lines', line=dict(color=color, width=2)))
+            fig.update_layout(title=title, height=250, margin=dict(l=0,r=0,t=30,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='rgba(212,175,55,0.1)'))
+            return fig
+
+        if "S&P 500" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["S&P 500"], "S&P 500 Index", "#d4af37"), use_container_width=True)
+        if "NASDAQ" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["NASDAQ"], "NASDAQ Composite", "#00d2ff"), use_container_width=True)
+        if "Volatility (VIX)" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["Volatility (VIX)"], "VIX (Fear Index)", "#ff4b4b"), use_container_width=True)
+        if "10-Yr Treasury Yield" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["10-Yr Treasury Yield"], "10-Yr Treasury Yield (%)", "#28a745"), use_container_width=True)
+    else:
+        st.error("Failed to fetch macroeconomic data.")
+
 
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
