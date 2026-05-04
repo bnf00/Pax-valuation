@@ -17,16 +17,40 @@ import matplotlib.pyplot as plt
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
-# Persistence Logic: Initialize Session State
-if 'v_state' not in st.session_state:
-    st.session_state.v_state = {
-        'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
-        'dcf_fcf': 1000.0, 'dcf_g': 10.0, 'dcf_tg': 2.5, 'dcf_wacc': 9.0, 'dcf_shares': 500.0, 'dcf_debt': 2000.0,
-        'rel_choice': "Earnings per Share (EPS)", # Устарело, но оставим для совместимости
-        'rel_eps': 5.0, 'rel_pe': 15.0,
-        'rel_ebitda': 500.0, 'rel_eveb': 10.0, 'rel_sh1': 100.0, 'rel_nd1': 500.0,
-        'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
-    }
+# ==========================================
+# 2. ПЕРМАНЕНТНАЯ БАЗА ДАННЫХ ДЛЯ VALUATION LAB
+# ==========================================
+VAL_DB_FILE = "valuation_settings.json"
+
+DEFAULT_V_STATE = {
+    'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
+    'dcf_fcf': 1000.0, 'dcf_g': 10.0, 'dcf_tg': 2.5, 'dcf_wacc': 9.0, 'dcf_shares': 500.0, 'dcf_debt': 2000.0,
+    'rel_eps': 5.0, 'rel_pe': 15.0,
+    'rel_ebitda': 500.0, 'rel_eveb': 10.0, 'rel_sh1': 100.0, 'rel_nd1': 500.0,
+    'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
+}
+
+def load_val_db():
+    if os.path.exists(VAL_DB_FILE):
+        try:
+            with open(VAL_DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_val_db(db):
+    with open(VAL_DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(db, f, indent=4)
+
+val_db = load_val_db()
+
+def get_safe_v_state(ticker):
+    # Берет сохраненные данные компании, а если их нет - использует дефолтные
+    state = DEFAULT_V_STATE.copy()
+    if ticker in val_db:
+        state.update(val_db[ticker])
+    return state
 
 # ==========================================
 # BACKGROUND IMAGE INJECTION
@@ -277,14 +301,14 @@ def generate_valuation_pdf(ticker, v_state):
 
     # HEADER
     pdf.set_font("Arial", 'B', 20)
-    pdf.set_text_color(212, 175, 55) # Gold
+    pdf.set_text_color(212, 175, 55) 
     pdf.cell(0, 15, f"Pax Valuation Laboratory: {ticker}", ln=True, align='C')
     pdf.line(10, 25, 200, 25)
     pdf.ln(5)
 
     def section_header(title):
         pdf.set_font("Arial", 'B', 14)
-        pdf.set_text_color(212, 175, 55) # Gold titles
+        pdf.set_text_color(212, 175, 55) 
         pdf.cell(0, 10, title, ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(2)
@@ -931,7 +955,8 @@ if app_mode == "Terminal (Analysis)":
             
             with col_pdf:
                 with st.spinner("Compiling Terminal Report..."):
-                    pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, st.session_state.v_state)
+                    ticker_state = get_safe_v_state(selected_ticker)
+                    pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, ticker_state)
                 
                 st.download_button(
                     label="📥 Export Terminal Report (PDF)",
@@ -1086,12 +1111,15 @@ elif app_mode == "Valuation Lab":
         selected_ticker = st.selectbox("Select Company for Analysis", df_watchlist['Stock'].tolist())
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
+        
+        # ЗАГРУЖАЕМ ИЛИ СОЗДАЕМ СОСТОЯНИЕ ДЛЯ КОНКРЕТНОГО ТИКЕРА
+        ticker_state = get_safe_v_state(selected_ticker)
 
         col_title, col_pdf_btn = st.columns([3, 1])
         with col_title:
             st.write(f"Dynamic valuation models for **{selected_ticker}**.")
         with col_pdf_btn:
-            pdf_bytes_val = generate_valuation_pdf(selected_ticker, st.session_state.v_state)
+            pdf_bytes_val = generate_valuation_pdf(selected_ticker, ticker_state)
             st.download_button(
                 label="📥 Export Valuation Report (PDF)",
                 data=pdf_bytes_val,
@@ -1113,13 +1141,13 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ DDM Assumptions")
-                st.session_state.v_state['ddm_div'] = st.number_input("Current Annual Dividend per Share ($)", value=float(st.session_state.v_state['ddm_div']), step=0.1)
-                st.session_state.v_state['ddm_g'] = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(st.session_state.v_state['ddm_g']), step=0.1, format="%f%%")
-                st.session_state.v_state['ddm_ke'] = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(st.session_state.v_state['ddm_ke']), step=0.5, format="%f%%")
+                ticker_state['ddm_div'] = st.number_input("Current Annual Dividend per Share ($)", value=float(ticker_state['ddm_div']), step=0.1)
+                ticker_state['ddm_g'] = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(ticker_state['ddm_g']), step=0.1, format="%f%%")
+                ticker_state['ddm_ke'] = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(ticker_state['ddm_ke']), step=0.5, format="%f%%")
                 
-                div_0 = st.session_state.v_state['ddm_div']
-                g_div = st.session_state.v_state['ddm_g'] / 100
-                ke = st.session_state.v_state['ddm_ke'] / 100
+                div_0 = ticker_state['ddm_div']
+                g_div = ticker_state['ddm_g'] / 100
+                ke = ticker_state['ddm_ke'] / 100
             
             with col_results:
                 st.markdown("#### 📊 DDM Valuation")
@@ -1162,21 +1190,21 @@ elif app_mode == "Valuation Lab":
             col_inputs, col_results = st.columns([1, 2], gap="large")
             with col_inputs:
                 st.markdown("#### ⚙️ DCF Assumptions")
-                st.session_state.v_state['dcf_fcf'] = st.number_input("Base Free Cash Flow (FCF) $M", value=float(st.session_state.v_state['dcf_fcf']), step=100.0)
-                st.session_state.v_state['dcf_g'] = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=float(st.session_state.v_state['dcf_g']), step=1.0, format="%f%%")
-                st.session_state.v_state['dcf_tg'] = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=float(st.session_state.v_state['dcf_tg']), step=0.1, format="%f%%")
-                st.session_state.v_state['dcf_wacc'] = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=float(st.session_state.v_state['dcf_wacc']), step=0.5, format="%f%%")
+                ticker_state['dcf_fcf'] = st.number_input("Base Free Cash Flow (FCF) $M", value=float(ticker_state['dcf_fcf']), step=100.0)
+                ticker_state['dcf_g'] = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=float(ticker_state['dcf_g']), step=1.0, format="%f%%")
+                ticker_state['dcf_tg'] = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=float(ticker_state['dcf_tg']), step=0.1, format="%f%%")
+                ticker_state['dcf_wacc'] = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=float(ticker_state['dcf_wacc']), step=0.5, format="%f%%")
                 
                 st.markdown("#### 🏢 Capital Structure")
-                st.session_state.v_state['dcf_shares'] = st.number_input("Shares Outstanding (Millions)", value=float(st.session_state.v_state['dcf_shares']), step=10.0)
-                st.session_state.v_state['dcf_debt'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(st.session_state.v_state['dcf_debt']), step=100.0)
+                ticker_state['dcf_shares'] = st.number_input("Shares Outstanding (Millions)", value=float(ticker_state['dcf_shares']), step=10.0)
+                ticker_state['dcf_debt'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(ticker_state['dcf_debt']), step=100.0)
                 
-                fcf_base = st.session_state.v_state['dcf_fcf']
-                growth_rate = st.session_state.v_state['dcf_g'] / 100
-                terminal_growth = st.session_state.v_state['dcf_tg'] / 100
-                wacc = st.session_state.v_state['dcf_wacc'] / 100
-                shares_out_dcf = st.session_state.v_state['dcf_shares']
-                net_debt_dcf = st.session_state.v_state['dcf_debt']
+                fcf_base = ticker_state['dcf_fcf']
+                growth_rate = ticker_state['dcf_g'] / 100
+                terminal_growth = ticker_state['dcf_tg'] / 100
+                wacc = ticker_state['dcf_wacc'] / 100
+                shares_out_dcf = ticker_state['dcf_shares']
+                net_debt_dcf = ticker_state['dcf_debt']
                 
             with col_results:
                 st.markdown("#### 📊 DCF Projections & Valuation")
@@ -1238,11 +1266,11 @@ elif app_mode == "Valuation Lab":
             st.markdown("### 3A. Price-to-Earnings (P/E) Multiple")
             c1, c2 = st.columns([1, 2], gap="large")
             with c1:
-                st.session_state.v_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(st.session_state.v_state['rel_eps']), step=0.5)
-                st.session_state.v_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(st.session_state.v_state['rel_pe']), step=1.0)
+                ticker_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(ticker_state['rel_eps']), step=0.5)
+                ticker_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(ticker_state['rel_pe']), step=1.0)
             with c2:
-                base_eps = st.session_state.v_state['rel_eps']
-                target_pe = st.session_state.v_state['rel_pe']
+                base_eps = ticker_state['rel_eps']
+                target_pe = ticker_state['rel_pe']
                 int_pe = base_eps * target_pe
                 st.info(f"**Formula:** Implied Share Price = EPS ({base_eps}) × Target P/E ({target_pe})")
                 
@@ -1265,15 +1293,15 @@ elif app_mode == "Valuation Lab":
             st.markdown("### 3B. EV/EBITDA Multiple")
             c1, c2 = st.columns([1, 2], gap="large")
             with c1:
-                st.session_state.v_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(st.session_state.v_state['rel_ebitda']), step=50.0)
-                st.session_state.v_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(st.session_state.v_state['rel_eveb']), step=1.0)
-                st.session_state.v_state['rel_sh1'] = st.number_input("Shares Outstanding (M)", value=float(st.session_state.v_state['rel_sh1']), step=10.0, key="sh_ebitda")
-                st.session_state.v_state['rel_nd1'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd1']), step=50.0, key="nd_ebitda")
+                ticker_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(ticker_state['rel_ebitda']), step=50.0)
+                ticker_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(ticker_state['rel_eveb']), step=1.0)
+                ticker_state['rel_sh1'] = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh1']), step=10.0, key="sh_ebitda")
+                ticker_state['rel_nd1'] = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd1']), step=50.0, key="nd_ebitda")
             with c2:
-                base_ebitda = st.session_state.v_state['rel_ebitda']
-                target_eveb = st.session_state.v_state['rel_eveb']
-                sh_ebitda = st.session_state.v_state['rel_sh1']
-                nd_ebitda = st.session_state.v_state['rel_nd1']
+                base_ebitda = ticker_state['rel_ebitda']
+                target_eveb = ticker_state['rel_eveb']
+                sh_ebitda = ticker_state['rel_sh1']
+                nd_ebitda = ticker_state['rel_nd1']
                 
                 ev_ebitda = base_ebitda * target_eveb
                 eq_ebitda = ev_ebitda - nd_ebitda
@@ -1300,15 +1328,15 @@ elif app_mode == "Valuation Lab":
             st.markdown("### 3C. EV/Sales (Revenue) Multiple")
             c1, c2 = st.columns([1, 2], gap="large")
             with c1:
-                st.session_state.v_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(st.session_state.v_state['rel_rev']), step=100.0)
-                st.session_state.v_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(st.session_state.v_state['rel_evs']), step=0.5)
-                st.session_state.v_state['rel_sh2'] = st.number_input("Shares Outstanding (M)", value=float(st.session_state.v_state['rel_sh2']), step=10.0, key="sh_rev")
-                st.session_state.v_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(st.session_state.v_state['rel_nd2']), step=50.0, key="nd_rev")
+                ticker_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(ticker_state['rel_rev']), step=100.0)
+                ticker_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(ticker_state['rel_evs']), step=0.5)
+                ticker_state['rel_sh2'] = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh2']), step=10.0, key="sh_rev")
+                ticker_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd2']), step=50.0, key="nd_rev")
             with c2:
-                base_rev = st.session_state.v_state['rel_rev']
-                target_evs = st.session_state.v_state['rel_evs']
-                sh_rev = st.session_state.v_state['rel_sh2']
-                nd_rev = st.session_state.v_state['rel_nd2']
+                base_rev = ticker_state['rel_rev']
+                target_evs = ticker_state['rel_evs']
+                sh_rev = ticker_state['rel_sh2']
+                nd_rev = ticker_state['rel_nd2']
                 
                 ev_rev = base_rev * target_evs
                 eq_rev = ev_rev - nd_rev
@@ -1328,6 +1356,10 @@ elif app_mode == "Valuation Lab":
                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_rev)
                     save_db(df_watchlist)
                     st.success(f"Watchlist updated with EV/Sales method!")
+
+        # АВТО-СОХРАНЕНИЕ НАСТРОЕК В БАЗУ ДАННЫХ
+        val_db[selected_ticker] = ticker_state
+        save_val_db(val_db)
 
     else:
         st.warning("Your watchlist is empty. Add a company in the Terminal first.")
