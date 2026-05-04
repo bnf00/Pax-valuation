@@ -5,3 +5,4 @@ plotly
 gspread==5.12.0
 openpyxl
 google-auth
+pip install fpdf
