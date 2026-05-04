@@ -46,7 +46,6 @@ def save_val_db(db):
 val_db = load_val_db()
 
 def get_safe_v_state(ticker):
-    # Берет сохраненные данные компании, а если их нет - использует дефолтные
     state = DEFAULT_V_STATE.copy()
     if ticker in val_db:
         state.update(val_db[ticker])
@@ -292,7 +291,7 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
     return pdf.output(dest='S').encode('latin-1')
 
 # ---------------------------------------------------------
-# PDF 2: VALUATION LAB REPORT (УЛУЧШЕННЫЙ)
+# PDF 2: VALUATION LAB REPORT 
 # ---------------------------------------------------------
 def generate_valuation_pdf(ticker, v_state):
     pdf = FPDF()
@@ -504,6 +503,17 @@ def fetch_live_financials(ticker):
         }
         return formatted, str(latest_bs_col.year)
     except Exception: return None, None
+
+@st.cache_data(ttl=86400)
+def fetch_dividend_yield(ticker):
+    try:
+        tk = yf.Ticker(ticker)
+        info = tk.info
+        div = info.get('dividendYield', 0)
+        if div is None: div = 0
+        return float(div)
+    except:
+        return 0.0
 
 def clean_excel_data(df):
     def format_cell(x):
@@ -802,7 +812,7 @@ if app_mode == "Terminal (Analysis)":
             except: st.error("Error fetching chart data.")
         else: st.warning("Your watchlist is empty.")
 
-    # --- PAGE 3: RATIOS ---
+    # --- PAGE 3: RATIOS (EXCEL + NWC) ---
     with tab_ratios:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Financial Ratios: {selected_ticker}")
@@ -1065,11 +1075,38 @@ elif app_mode == "My Portfolio":
         total_pnl = total_value - total_cost
         total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
         
-        m1, m2, m3 = st.columns(3)
+        # Расчет дивидендов
+        annual_div_income = 0.0
+        for idx, row in display_port.iterrows():
+            dy = fetch_dividend_yield(row['Stock'])
+            annual_div_income += row['Total Value'] * dy
+
+        portfolio_yield = (annual_div_income / total_value * 100) if total_value > 0 else 0.0
+
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Value", f"${total_value:,.2f}")
         m2.metric("Total Cost Basis", f"${total_cost:,.2f}")
         m3.metric("Total Return (P&L)", f"${total_pnl:,.2f}", f"{total_pnl_pct:.2f}%")
+        m4.metric("Est. Annual Dividends", f"${annual_div_income:,.2f}", f"{portfolio_yield:.2f}% Yield", delta_color="off")
         
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        st.write("### Portfolio Analytics")
+        g1, g2 = st.columns(2)
+        
+        with g1:
+            if total_value > 0:
+                fig_pie = go.Figure(data=[go.Pie(labels=display_port['Stock'], values=display_port['Total Value'], hole=.4)])
+                fig_pie.update_layout(title="Asset Allocation", margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
+                st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with g2:
+            if not display_port.empty:
+                colors = ['#28a745' if val > 0 else '#ff4b4b' for val in display_port['P&L ($)']]
+                fig_bar = go.Figure(data=[go.Bar(x=display_port['Stock'], y=display_port['P&L ($)'], marker_color=colors)])
+                fig_bar.update_layout(title="P&L by Asset ($)", margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
         st.markdown("<hr>", unsafe_allow_html=True)
         st.write("📝 **Edit your positions below:** (Update 'Shares' and 'Avg Cost')")
         
@@ -1102,7 +1139,7 @@ elif app_mode == "My Portfolio":
         st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: VALUATION LAB (С ВЫВОДОМ ВСЕХ МЕТОДОВ ПОДРЯД)
+# РОУТИНГ: VALUATION LAB 
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
@@ -1112,7 +1149,6 @@ elif app_mode == "Valuation Lab":
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
         
-        # ЗАГРУЖАЕМ ИЛИ СОЗДАЕМ СОСТОЯНИЕ ДЛЯ КОНКРЕТНОГО ТИКЕРА
         ticker_state = get_safe_v_state(selected_ticker)
 
         col_title, col_pdf_btn = st.columns([3, 1])
@@ -1258,7 +1294,7 @@ elif app_mode == "Valuation Lab":
             """, unsafe_allow_html=True)
 
         # ------------------------------------------
-        # МЕТОД 3: RELATIVE VALUATION (ВСЕ МЕТОДЫ ВЕРТИКАЛЬНО)
+        # МЕТОД 3: RELATIVE VALUATION
         # ------------------------------------------
         with tab_rel:
             
@@ -1357,7 +1393,6 @@ elif app_mode == "Valuation Lab":
                     save_db(df_watchlist)
                     st.success(f"Watchlist updated with EV/Sales method!")
 
-        # АВТО-СОХРАНЕНИЕ НАСТРОЕК В БАЗУ ДАННЫХ
         val_db[selected_ticker] = ticker_state
         save_val_db(val_db)
 
