@@ -17,6 +17,17 @@ import matplotlib.pyplot as plt
 # ==========================================
 st.set_page_config(page_title="Pax Valuation", layout="wide", initial_sidebar_state="expanded")
 
+# Persistence Logic: Initialize Session State
+if 'v_state' not in st.session_state:
+    st.session_state.v_state = {
+        'ddm_div': 2.0, 'ddm_g': 3.0, 'ddm_ke': 8.0,
+        'dcf_fcf': 1000.0, 'dcf_g': 10.0, 'dcf_tg': 2.5, 'dcf_wacc': 9.0, 'dcf_shares': 500.0, 'dcf_debt': 2000.0,
+        'rel_choice': "Earnings per Share (EPS)",
+        'rel_eps': 5.0, 'rel_pe': 15.0,
+        'rel_ebitda': 500.0, 'rel_eveb': 10.0, 'rel_sh1': 100.0, 'rel_nd1': 500.0,
+        'rel_rev': 2000.0, 'rel_evs': 4.0, 'rel_sh2': 100.0, 'rel_nd2': 500.0
+    }
+
 # ==========================================
 # 2. ПЕРМАНЕНТНАЯ БАЗА ДАННЫХ ДЛЯ VALUATION LAB
 # ==========================================
@@ -33,22 +44,18 @@ DEFAULT_V_STATE = {
 def load_val_db():
     if os.path.exists(VAL_DB_FILE):
         try:
-            with open(VAL_DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
+            with open(VAL_DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
+        except: return {}
     return {}
 
 def save_val_db(db):
-    with open(VAL_DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=4)
+    with open(VAL_DB_FILE, "w", encoding="utf-8") as f: json.dump(db, f, indent=4)
 
 val_db = load_val_db()
 
 def get_safe_v_state(ticker):
     state = DEFAULT_V_STATE.copy()
-    if ticker in val_db:
-        state.update(val_db[ticker])
+    if ticker in val_db: state.update(val_db[ticker])
     return state
 
 # ==========================================
@@ -56,8 +63,7 @@ def get_safe_v_state(ticker):
 # ==========================================
 @st.cache_data
 def get_base64_bg(file_path):
-    with open(file_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode()
+    with open(file_path, "rb") as image_file: return base64.b64encode(image_file.read()).decode()
 
 def add_bg_from_local():
     bg_file = "bg.jpg" if os.path.exists("bg.jpg") else ("bg.png" if os.path.exists("bg.png") else None)
@@ -134,13 +140,12 @@ if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
 # ---------------------------------------------------------
-# PDF 1: TERMINAL REPORT 
+# PDF 1: TERMINAL REPORT
 # ---------------------------------------------------------
 def generate_full_pdf_report(ticker, df_watchlist, v_state):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-
     pdf.set_font("Arial", 'B', 20)
     pdf.set_text_color(212, 175, 55)
     pdf.cell(0, 15, f"Pax Investment Report: {ticker}", ln=True, align='C')
@@ -160,7 +165,6 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
         pdf.set_text_color(0, 0, 0)
         pdf.ln(3)
 
-    # 1. PROFILE
     section_title("1. Company Profile (1-Year Market Chart)")
     try:
         stock = yf.Ticker(ticker)
@@ -172,27 +176,22 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
             ax.grid(True, alpha=0.3)
             ax.set_facecolor('#ffffff')
             fig.patch.set_facecolor('#ffffff')
-            
             chart_path = f"temp_chart_{ticker}.png"
             plt.savefig(chart_path, bbox_inches='tight', dpi=150)
             plt.close(fig)
-            
             pdf.image(chart_path, x=15, w=180)
             os.remove(chart_path)
             pdf.ln(5)
-        else:
-            no_info()
-    except Exception:
+        else: no_info()
+    except:
         pdf.set_font("Arial", '', 11)
         pdf.cell(0, 8, f"Chart unavailable. Data fetch error.", ln=True)
         pdf.ln(3)
 
-    # 2. RATIOS
     section_title("2. Financial Ratios")
     path = os.path.join(FILES_DIR, f"{ticker}.xlsx")
     ratios_found = False
     metrics = {}
-    
     if os.path.exists(path):
         xls = pd.ExcelFile(path)
         if 'Ratios' in xls.sheet_names:
@@ -217,10 +216,8 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
             pdf.cell(80, 8, str(v), border=1, ln=True, fill=fill)
             fill = not fill
         pdf.ln(5)
-    else:
-        no_info()
+    else: no_info()
 
-    # 3. VALUATION MODELS (Excel Models)
     section_title("3. Valuation Targets (Excel Models)")
     pdf.set_font("Arial", '', 11)
     if os.path.exists(path):
@@ -246,13 +243,10 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
                 pdf.cell(100, 8, str(k), border=1, fill=fill)
                 pdf.cell(80, 8, f"${v:,.2f}", border=1, ln=True, fill=fill)
                 fill = not fill
-        else:
-            no_info()
-    else:
-        no_info()
+        else: no_info()
+    else: no_info()
     pdf.ln(3)
 
-    # 4. COMPARISON
     section_title("4. Watchlist Comparison Summary")
     if not df_watchlist.empty:
         pdf.set_font("Arial", 'B', 10)
@@ -270,23 +264,18 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
             pdf.cell(60, 8, str(r['Potential']), border=1, ln=True, fill=fill)
             fill = not fill
         pdf.ln(5)
-    else:
-        no_info()
+    else: no_info()
 
-    # 5. NOTES
     section_title("5. Analyst Notes & Thesis")
     note_path = os.path.join(NOTES_DIR, f"{ticker}_notes.txt")
     if os.path.exists(note_path):
-        with open(note_path, "r", encoding="utf-8") as f:
-            notes = f.read().strip()
+        with open(note_path, "r", encoding="utf-8") as f: notes = f.read().strip()
         if notes:
             pdf.set_font("Arial", '', 11)
             clean_notes = notes.encode('latin-1', 'replace').decode('latin-1')
             pdf.multi_cell(0, 6, clean_notes)
-        else:
-            no_info()
-    else:
-        no_info()
+        else: no_info()
+    else: no_info()
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -298,7 +287,6 @@ def generate_valuation_pdf(ticker, v_state):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # HEADER
     pdf.set_font("Arial", 'B', 20)
     pdf.set_text_color(212, 175, 55) 
     pdf.cell(0, 15, f"Pax Valuation Laboratory: {ticker}", ln=True, align='C')
@@ -319,28 +307,23 @@ def generate_valuation_pdf(ticker, v_state):
         else:
             pdf.set_font("Arial", '', 11)
             pdf.set_fill_color(245, 245, 245)
-            
         pdf.cell(110, 8, str(key), border=1, fill=fill or is_header)
         pdf.cell(70, 8, str(val), border=1, ln=True, align='R', fill=fill or is_header)
 
-    # --- METHOD 1: DDM ---
     section_header("Method 1: Gordon Growth Model (DDM)")
     div_0 = v_state.get('ddm_div', 0)
     g_div = v_state.get('ddm_g', 0) / 100
     ke = v_state.get('ddm_ke', 1) / 100
     ddm_val = div_0 * (1 + g_div) / (ke - g_div) if ke > g_div else 0
-
     add_row("Inputs (Assumptions)", "", is_header=True)
     add_row("Current Annual Dividend ($)", f"${div_0:,.2f}", fill=False)
     add_row("Expected Dividend Growth", f"{g_div*100:.1f}%", fill=True)
     add_row("Cost of Equity", f"{ke*100:.1f}%", fill=False)
-    
     add_row("Outputs (Results)", "", is_header=True)
     add_row("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):,.2f}", fill=False)
     add_row("Intrinsic Value per Share", f"${ddm_val:,.2f}" if ddm_val > 0 else "Error (Ke <= G)", fill=True)
     pdf.ln(8)
 
-    # --- METHOD 2: DCF ---
     section_header("Method 2: Multi-Stage DCF")
     fcf_base = v_state.get('dcf_fcf', 0)
     growth_rate = v_state.get('dcf_g', 0) / 100
@@ -348,7 +331,6 @@ def generate_valuation_pdf(ticker, v_state):
     wacc = v_state.get('dcf_wacc', 1) / 100
     shares_out = v_state.get('dcf_shares', 1)
     net_debt = v_state.get('dcf_debt', 0)
-    
     fcfs, pvs = [], []
     for year in range(1, 6):
         fcf = fcf_base * ((1 + growth_rate) ** year)
@@ -359,7 +341,6 @@ def generate_valuation_pdf(ticker, v_state):
     enterprise_val = sum(pvs) + pv_tv
     equity_val = enterprise_val - net_debt
     dcf_val = equity_val / shares_out if shares_out > 0 else 0
-
     add_row("Inputs (Assumptions)", "", is_header=True)
     add_row("Base Free Cash Flow ($M)", f"${fcf_base:,.1f}", fill=False)
     add_row("FCF Growth Rate (Y1-5)", f"{growth_rate*100:.1f}%", fill=True)
@@ -367,17 +348,13 @@ def generate_valuation_pdf(ticker, v_state):
     add_row("Discount Rate (WACC)", f"{wacc*100:.1f}%", fill=True)
     add_row("Shares Outstanding (M)", f"{shares_out:,.1f}", fill=False)
     add_row("Net Debt ($M)", f"${net_debt:,.1f}", fill=True)
-
     add_row("Outputs (Results)", "", is_header=True)
     add_row("Enterprise Value ($M)", f"${enterprise_val:,.1f}", fill=False)
     add_row("Equity Value ($M)", f"${equity_val:,.1f}", fill=True)
     add_row("Intrinsic Value per Share", f"${dcf_val:,.2f}", fill=False)
     pdf.ln(8)
 
-    # --- METHOD 3: RELATIVE VALUATION (ВСЕ МЕТОДЫ) ---
     section_header("Method 3: Relative Valuation (Multiples)")
-    
-    # 3A. EPS
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 8, "3A. Price-to-Earnings (P/E)", ln=True)
     rel_eps = v_state.get('rel_eps', 0)
@@ -388,7 +365,6 @@ def generate_valuation_pdf(ticker, v_state):
     add_row("Implied Value per Share", f"${int_pe:,.2f}", fill=True)
     pdf.ln(5)
 
-    # 3B. EV/EBITDA
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 8, "3B. EV/EBITDA", ln=True)
     rel_ebitda = v_state.get('rel_ebitda', 0)
@@ -405,7 +381,6 @@ def generate_valuation_pdf(ticker, v_state):
     add_row("Implied Value per Share", f"${int_ebitda:,.2f}", fill=True)
     pdf.ln(5)
 
-    # 3C. EV/Sales
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 8, "3C. EV/Sales (Revenue)", ln=True)
     rel_rev = v_state.get('rel_rev', 0)
@@ -424,9 +399,8 @@ def generate_valuation_pdf(ticker, v_state):
     return pdf.output(dest='S').encode('latin-1')
 
 # ---------------------------------------------------------
-# REST OF APP FUNCTIONS
+# DATA FETCHING CACHED FUNCTIONS
 # ---------------------------------------------------------
-
 @st.cache_data(ttl=3600)
 def search_company(query):
     query = str(query).strip()
@@ -489,18 +463,13 @@ def fetch_live_financials(ticker):
         bs = stock.balance_sheet
         if bs.empty: return None, None
         latest_bs_col = bs.columns[0]
-        
         def get_metric(df, col_name, date_col):
             try: return float(df.loc[col_name, date_col])
             except: return 0.0
-
         current_assets = get_metric(bs, 'Current Assets', latest_bs_col)
         current_liabilities = get_metric(bs, 'Current Liabilities', latest_bs_col)
         nwc = current_assets - current_liabilities
-        
-        formatted = {
-            "Net Working Capital": f"${nwc:,.0f}" if nwc != 0 else "N/A"
-        }
+        formatted = {"Net Working Capital": f"${nwc:,.0f}" if nwc != 0 else "N/A"}
         return formatted, str(latest_bs_col.year)
     except Exception: return None, None
 
@@ -512,8 +481,7 @@ def fetch_dividend_yield(ticker):
         div = info.get('dividendYield', 0)
         if div is None: div = 0
         return float(div)
-    except:
-        return 0.0
+    except: return 0.0
 
 def clean_excel_data(df):
     def format_cell(x):
@@ -621,32 +589,23 @@ def extract_key_ratios(df):
 # ЧИСТАЯ ЛОКАЛЬНАЯ БАЗА ДАННЫХ
 # ==========================================
 DB_FILE = "watchlist.csv"
-
 if os.path.exists(DB_FILE):
     df_watchlist = pd.read_csv(DB_FILE)
     for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
-        if col in df_watchlist.columns:
-            df_watchlist[col] = df_watchlist[col].astype('object')
+        if col in df_watchlist.columns: df_watchlist[col] = df_watchlist[col].astype('object')
     if 'Shares' not in df_watchlist.columns: df_watchlist['Shares'] = 0.0
     if 'Avg Cost' not in df_watchlist.columns: df_watchlist['Avg Cost'] = 0.0
     if 'In Portfolio' not in df_watchlist.columns: df_watchlist['In Portfolio'] = False
 else:
     df_watchlist = pd.DataFrame(columns=["Stock", "Company name", "Interest", "Market price", "Intrinsic value", "Potential", "In Portfolio", "Shares", "Avg Cost"])
-    for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]:
-        df_watchlist[col] = df_watchlist[col].astype('object')
+    for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]: df_watchlist[col] = df_watchlist[col].astype('object')
 
-def save_db(df):
-    df.to_csv(DB_FILE, index=False)
+def save_db(df): df.to_csv(DB_FILE, index=False)
 
 # ==========================================
 # SIDEBAR NAVIGATION
 # ==========================================
-st.sidebar.markdown("""
-    <div class="nav-header">
-        <h3>Navigation</h3>
-    </div>
-""", unsafe_allow_html=True)
-
+st.sidebar.markdown("""<div class="nav-header"><h3>Navigation</h3></div>""", unsafe_allow_html=True)
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "Macro Dashboard", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
@@ -663,32 +622,290 @@ def render_header():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# APP ROUTING
+# ФРАГМЕНТЫ (ИЗОЛЯЦИЯ UI ДЛЯ УСКОРЕНИЯ)
+# ==========================================
+@st.fragment
+def render_company_profile(ticker, iv_raw):
+    st.subheader(f"Market Chart: {ticker}")
+    col_tf, col_int, _ = st.columns([1, 1, 2])
+    with col_tf: period_ui = st.selectbox("Period", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years"], index=2, key=f"p_{ticker}")
+    with col_int: interval_ui = st.selectbox("Interval", ["Daily", "Weekly", "Monthly"], index=0, key=f"i_{ticker}")
+    period_map = {"1 Month": "1mo", "6 Months": "6mo", "1 Year": "1y", "5 Years": "5y", "10 Years": "10y"}
+    interval_map = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
+    try:
+        stock_obj = yf.Ticker(ticker)
+        df_h = stock_obj.history(period=period_map[period_ui], interval=interval_map[interval_ui])
+        if not df_h.empty:
+            fig = go.Figure(data=[go.Candlestick(x=df_h.index, open=df_h['Open'], high=df_h['High'], low=df_h['Low'], close=df_h['Close'], increasing_line_color='#d4af37', decreasing_line_color='#8a7122')])
+            try:
+                iv_float = float(str(iv_raw).replace('$', '').replace(',', ''))
+                if iv_float > 0: fig.add_hline(y=iv_float, line_dash="dash", line_color="#d4af37", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right", annotation_font_color="#d4af37")
+            except: pass
+            fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
+            st.plotly_chart(fig, use_container_width=True)
+    except: st.error("Error fetching chart data.")
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.subheader(f"📰 Recent News for {ticker}")
+    news_data = fetch_robust_news(ticker)
+    if news_data:
+        for article in news_data:
+            st.markdown(f"**[{article['title']}]({article['link']})**")
+            st.caption(f"Yahoo Finance RSS • {article['date']}")
+            st.markdown("<br>", unsafe_allow_html=True)
+    else: st.info("No recent news found for this ticker.")
+
+@st.fragment
+def render_macro_section():
+    col_macro_period, col_macro_interval, _ = st.columns([1, 1, 3])
+    with col_macro_period: m_period_ui = st.selectbox("Timeframe", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years", "Max"], index=4, key="macro_period")
+    with col_macro_interval: m_interval_ui = st.selectbox("Interval", ["Daily", "Weekly", "Monthly"], index=2, key="macro_interval")
+    m_period_map = {"1 Month": "1mo", "6 Months": "6mo", "1 Year": "1y", "5 Years": "5y", "10 Years": "10y", "Max": "max"}
+    m_interval_map = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
+    macro_symbols = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "Volatility (VIX)": "^VIX", "10-Yr Treasury Yield": "^TNX"}
+    
+    @st.cache_data(ttl=3600)
+    def fetch_macro_data(period, interval):
+        hist_data, current_data = {}, {}
+        for name, symbol in macro_symbols.items():
+            try:
+                tk = yf.Ticker(symbol)
+                hist = tk.history(period=period, interval=interval)
+                if not hist.empty and len(hist) > 1:
+                    hist = hist.dropna(subset=['Close'])
+                    hist_data[name] = hist['Close']
+                    current_price = hist['Close'].iloc[-1]
+                    prev_price = hist['Close'].iloc[-2]
+                    pct_change = ((current_price - prev_price) / prev_price) * 100
+                    if symbol == "^TNX": current_data[name] = {"val": f"{current_price:.2f}%", "change": f"{pct_change:+.2f}%"}
+                    else: current_data[name] = {"val": f"{current_price:,.2f}", "change": f"{pct_change:+.2f}%"}
+            except: pass
+        return hist_data, current_data
+
+    with st.spinner("Fetching global market data..."):
+        macro_hist, macro_current = fetch_macro_data(m_period_map[m_period_ui], m_interval_map[m_interval_ui])
+        
+    if macro_current:
+        cols = st.columns(4)
+        for i, (name, data) in enumerate(macro_current.items()):
+            delta_col = "inverse" if name == "Volatility (VIX)" else "normal"
+            cols[i].metric(name, data['val'], data['change'], delta_color=delta_col)
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.write(f"### {m_period_ui} Market Trends")
+        c1, c2 = st.columns(2)
+        def plot_sparkline(series, title, color):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=series.index, y=series.values, mode='lines', line=dict(color=color, width=2)))
+            fig.update_layout(title=title, height=250, margin=dict(l=0,r=0,t=30,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='rgba(212,175,55,0.1)'))
+            return fig
+
+        if "S&P 500" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["S&P 500"], "S&P 500 Index", "#d4af37"), use_container_width=True)
+        if "NASDAQ" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["NASDAQ"], "NASDAQ Composite", "#00d2ff"), use_container_width=True)
+        if "Volatility (VIX)" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["Volatility (VIX)"], "VIX (Fear Index)", "#ff4b4b"), use_container_width=True)
+        if "10-Yr Treasury Yield" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["10-Yr Treasury Yield"], "10-Yr Treasury Yield (%)", "#28a745"), use_container_width=True)
+    else: st.error("Failed to fetch macroeconomic data.")
+
+@st.fragment
+def render_ddm_lab(ticker, current_p, ticker_state):
+    col_inputs, col_results = st.columns([1, 2], gap="large")
+    with col_inputs:
+        st.markdown("#### ⚙️ DDM Assumptions")
+        # Сохраняем состояние при изменении ползунков
+        div_0 = st.number_input("Current Annual Dividend per Share ($)", value=float(ticker_state['ddm_div']), step=0.1, key=f"d_div_{ticker}")
+        g_div_raw = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(ticker_state['ddm_g']), step=0.1, format="%f%%", key=f"d_g_{ticker}")
+        ke_raw = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(ticker_state['ddm_ke']), step=0.5, format="%f%%", key=f"d_ke_{ticker}")
+        
+        # Автосохранение в JSON
+        ticker_state['ddm_div'] = div_0
+        ticker_state['ddm_g'] = g_div_raw
+        ticker_state['ddm_ke'] = ke_raw
+        val_db[ticker] = ticker_state
+        save_val_db(val_db)
+        
+        g_div = g_div_raw / 100
+        ke = ke_raw / 100
+    
+    with col_results:
+        st.markdown("#### 📊 DDM Valuation")
+        if ke <= g_div:
+            st.error("Error: Cost of Equity must be strictly greater than the Dividend Growth Rate for the Gordon model to work.")
+            intrinsic_value = 0.0
+        else:
+            intrinsic_value = div_0 * (1 + g_div) / (ke - g_div)
+            m1, m2 = st.columns(2)
+            m1.metric("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):.2f}")
+            if current_p > 0:
+                upside = ((intrinsic_value - current_p) / current_p) * 100
+                m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+            else: m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0), key=f"sync_ddm_{ticker}"):
+            global df_watchlist
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = intrinsic_value
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
+            save_db(df_watchlist)
+            st.rerun() # Полная перезагрузка чтобы обновить Watchlist везде
+            
+    st.markdown("""<div class="guide-box"><h4>💡 Шпаргалка аналитика: Gordon Growth Model (DDM)</h4><ul><li><b>Когда использовать:</b> Для зрелых компаний, которые стабильно платят дивиденды и имеют четкую дивидендную политику. Предполагается, что дивиденды будут расти постоянным темпом вечно.</li><li><b>Идеальные кандидаты:</b> Коммунальные предприятия (Utilities), телекоммуникации (AT&T, Verizon), крупные банки (JPMorgan), устоявшиеся потребительские бренды (Coca-Cola, P&G).</li><li><b>Когда НЕ использовать:</b> Для компаний, которые не платят дивиденды (Amazon, Meta) или для быстрорастущих стартапов.</li></ul></div>""", unsafe_allow_html=True)
+
+@st.fragment
+def render_dcf_lab(ticker, current_p, ticker_state):
+    col_inputs, col_results = st.columns([1, 2], gap="large")
+    with col_inputs:
+        st.markdown("#### ⚙️ DCF Assumptions")
+        fcf_base = st.number_input("Base Free Cash Flow (FCF) $M", value=float(ticker_state['dcf_fcf']), step=100.0, key=f"c_fcf_{ticker}")
+        growth_raw = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=float(ticker_state['dcf_g']), step=1.0, format="%f%%", key=f"c_g_{ticker}")
+        t_growth_raw = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=float(ticker_state['dcf_tg']), step=0.1, format="%f%%", key=f"c_tg_{ticker}")
+        wacc_raw = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=float(ticker_state['dcf_wacc']), step=0.5, format="%f%%", key=f"c_wacc_{ticker}")
+        st.markdown("#### 🏢 Capital Structure")
+        shares_out = st.number_input("Shares Outstanding (Millions)", value=float(ticker_state['dcf_shares']), step=10.0, key=f"c_sh_{ticker}")
+        net_debt = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(ticker_state['dcf_debt']), step=100.0, key=f"c_nd_{ticker}")
+        
+        ticker_state['dcf_fcf'] = fcf_base; ticker_state['dcf_g'] = growth_raw; ticker_state['dcf_tg'] = t_growth_raw
+        ticker_state['dcf_wacc'] = wacc_raw; ticker_state['dcf_shares'] = shares_out; ticker_state['dcf_debt'] = net_debt
+        val_db[ticker] = ticker_state
+        save_val_db(val_db)
+
+        growth_rate = growth_raw / 100
+        terminal_growth = t_growth_raw / 100
+        wacc = wacc_raw / 100
+        
+    with col_results:
+        st.markdown("#### 📊 DCF Projections & Valuation")
+        fcfs, pvs = [], []
+        years = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
+        for year in range(1, 6):
+            fcf = fcf_base * ((1 + growth_rate) ** year)
+            pv = fcf / ((1 + wacc) ** year)
+            fcfs.append(fcf); pvs.append(pv)
+            
+        terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
+        pv_tv = terminal_value / ((1 + wacc) ** 5)
+        enterprise_val = sum(pvs) + pv_tv
+        equity_val = enterprise_val - net_debt
+        intrinsic_value = equity_val / shares_out if shares_out > 0 else 0
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Enterprise Value", f"${enterprise_val:,.1f} M")
+        m2.metric("Equity Value", f"${equity_val:,.1f} M")
+        if current_p > 0:
+            upside = ((intrinsic_value - current_p) / current_p) * 100
+            m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
+        else: m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        fig_dcf = go.Figure()
+        fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#b38200'))
+        fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#d4af37'))
+        fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), font=dict(color='#e0d8c8'))
+        st.plotly_chart(fig_dcf, use_container_width=True)
+        
+        if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{ticker}"):
+            global df_watchlist
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = intrinsic_value
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
+            save_db(df_watchlist)
+            st.rerun()
+            
+    st.markdown("""<div class="guide-box"><h4>💡 Шпаргалка аналитика: Discounted Cash Flow (DCF)</h4><ul><li><b>Когда использовать:</b> Золотой стандарт оценки. Используется, когда компания генерирует стабильный и прогнозируемый свободный денежный поток (Free Cash Flow).</li><li><b>Идеальные кандидаты:</b> Технологические гиганты (Apple, Microsoft), производственные компании, крупные ритейлеры (Walmart).</li><li><b>Когда НЕ использовать:</b> Для банков и страховых компаний, а также для сверх-рискованных стартапов без денежного потока.</li></ul></div>""", unsafe_allow_html=True)
+
+@st.fragment
+def render_relative_lab(ticker, current_p, ticker_state):
+    # 3A. P/E
+    st.markdown("### 3A. Price-to-Earnings (P/E) Multiple")
+    c1, c2 = st.columns([1, 2], gap="large")
+    with c1:
+        base_eps = st.number_input("Company EPS ($)", value=float(ticker_state['rel_eps']), step=0.5, key=f"r_eps_{ticker}")
+        target_pe = st.number_input("Target P/E Multiple (Industry Avg)", value=float(ticker_state['rel_pe']), step=1.0, key=f"r_pe_{ticker}")
+    with c2:
+        int_pe = base_eps * target_pe
+        st.info(f"**Formula:** Implied Share Price = EPS ({base_eps}) × Target P/E ({target_pe})")
+        m1, _ = st.columns(2)
+        if current_p > 0:
+            upside_pe = ((int_pe - current_p) / current_p) * 100
+            m1.metric("Implied Value per Share", f"${int_pe:,.2f}", f"{upside_pe:+.2f}% Upside", delta_color="normal")
+        else: m1.metric("Implied Value per Share", f"${int_pe:,.2f}")
+        if st.button("💾 Sync P/E Value to Watchlist", type="primary", use_container_width=True, disabled=(int_pe<=0), key=f"sync_pe_{ticker}"):
+            global df_watchlist
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = int_pe
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), int_pe)
+            save_db(df_watchlist)
+            st.rerun()
+            
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # 3B. EV/EBITDA
+    st.markdown("### 3B. EV/EBITDA Multiple")
+    c1, c2 = st.columns([1, 2], gap="large")
+    with c1:
+        base_ebitda = st.number_input("Company EBITDA $M", value=float(ticker_state['rel_ebitda']), step=50.0, key=f"r_eb_{ticker}")
+        target_eveb = st.number_input("Target EV/EBITDA Multiple", value=float(ticker_state['rel_eveb']), step=1.0, key=f"r_eveb_{ticker}")
+        sh_ebitda = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh1']), step=10.0, key=f"sh_ebitda_{ticker}")
+        nd_ebitda = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd1']), step=50.0, key=f"nd_ebitda_{ticker}")
+    with c2:
+        ev_ebitda = base_ebitda * target_eveb
+        eq_ebitda = ev_ebitda - nd_ebitda
+        int_ebitda = eq_ebitda / sh_ebitda if sh_ebitda > 0 else 0
+        st.info(f"**Formula:** Implied EV = EBITDA ({base_ebitda}) × EV/EBITDA ({target_eveb}) = {ev_ebitda} M<br>Equity Value = EV ({ev_ebitda}) - Net Debt ({nd_ebitda}) = {eq_ebitda} M")
+        m1, _ = st.columns(2)
+        if current_p > 0:
+            upside_eb = ((int_ebitda - current_p) / current_p) * 100
+            m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}", f"{upside_eb:+.2f}% Upside", delta_color="normal")
+        else: m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}")
+        if st.button("💾 Sync EV/EBITDA Value to Watchlist", type="primary", use_container_width=True, disabled=(int_ebitda<=0), key=f"sync_eveb_{ticker}"):
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = int_ebitda
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), int_ebitda)
+            save_db(df_watchlist)
+            st.rerun()
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+    
+    # 3C. EV/Sales
+    st.markdown("### 3C. EV/Sales (Revenue) Multiple")
+    c1, c2 = st.columns([1, 2], gap="large")
+    with c1:
+        base_rev = st.number_input("Company Revenue $M", value=float(ticker_state['rel_rev']), step=100.0, key=f"r_rev_{ticker}")
+        target_evs = st.number_input("Target EV/Sales Multiple", value=float(ticker_state['rel_evs']), step=0.5, key=f"r_evs_{ticker}")
+        sh_rev = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh2']), step=10.0, key=f"sh_rev_{ticker}")
+        nd_rev = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd2']), step=50.0, key=f"nd_rev_{ticker}")
+    with c2:
+        ev_rev = base_rev * target_evs
+        eq_rev = ev_rev - nd_rev
+        int_rev = eq_rev / sh_rev if sh_rev > 0 else 0
+        st.info(f"**Formula:** Implied EV = Revenue ({base_rev}) × EV/Sales ({target_evs}) = {ev_rev} M<br>Equity Value = EV ({ev_rev}) - Net Debt ({nd_rev}) = {eq_rev} M")
+        m1, _ = st.columns(2)
+        if current_p > 0:
+            upside_rev = ((int_rev - current_p) / current_p) * 100
+            m1.metric("Implied Value per Share", f"${int_rev:,.2f}", f"{upside_rev:+.2f}% Upside", delta_color="normal")
+        else: m1.metric("Implied Value per Share", f"${int_rev:,.2f}")
+        if st.button("💾 Sync EV/Sales Value to Watchlist", type="primary", use_container_width=True, disabled=(int_rev<=0), key=f"sync_evs_{ticker}"):
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = int_rev
+            df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), int_rev)
+            save_db(df_watchlist)
+            st.rerun()
+
+    # Сохраняем в БД при любых изменениях во фрагменте
+    ticker_state['rel_eps'] = base_eps; ticker_state['rel_pe'] = target_pe
+    ticker_state['rel_ebitda'] = base_ebitda; ticker_state['rel_eveb'] = target_eveb; ticker_state['rel_sh1'] = sh_ebitda; ticker_state['rel_nd1'] = nd_ebitda
+    ticker_state['rel_rev'] = base_rev; ticker_state['rel_evs'] = target_evs; ticker_state['rel_sh2'] = sh_rev; ticker_state['rel_nd2'] = nd_rev
+    val_db[ticker] = ticker_state
+    save_val_db(val_db)
+
+# ==========================================
+# APP ROUTING (Основное меню)
 # ==========================================
 
 if app_mode == "Terminal (Analysis)":
-    
     render_header()
-    
     nav_container = st.container()
-    
     with nav_container:
         st.markdown('<div id="active-company-anchor"></div>', unsafe_allow_html=True)
-        
-        selected_ticker = st.selectbox(
-            "Active Company", 
-            df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], 
-            label_visibility="collapsed"
-        )
-        
-        tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs([
-            "Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"
-        ])
+        selected_ticker = st.selectbox("Active Company", df_watchlist['Stock'].tolist() if not df_watchlist.empty else [""], label_visibility="collapsed")
+        tab_watchlist, tab_profile, tab_ratios, tab_val_models, tab_compare, tab_notes = st.tabs(["Watchlist", "Company Profile", "Financial Ratios", "Valuation Models", "Compare", "Notes"])
 
-    # --- PAGE 1: WATCHLIST ---
+    # --- WATCHLIST ---
     with tab_watchlist:
         col_add, col_upload, col_del = st.columns(3)
-        
         with col_add:
             with st.expander("➕ Add New Company"):
                 with st.form("add_form", clear_on_submit=True):
@@ -700,9 +917,7 @@ if app_mode == "Terminal (Analysis)":
                         new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
                         for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]: new_row[col] = new_row[col].astype('object')
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
-                        save_db(df_watchlist)
-                        st.rerun()
-
+                        save_db(df_watchlist); st.rerun()
         with col_upload:
             with st.expander("📂 Upload Excel Analysis"):
                 if not df_watchlist.empty:
@@ -712,7 +927,6 @@ if app_mode == "Terminal (Analysis)":
                         path = os.path.join(FILES_DIR, f"{upload_target}.xlsx")
                         with open(path, "wb") as f: f.write(up_file.getbuffer())
                         st.success(f"File attached to {upload_target}!")
-
         with col_del:
             with st.expander("❌ Remove Company"):
                 with st.form("delete_form"):
@@ -726,7 +940,6 @@ if app_mode == "Terminal (Analysis)":
                             st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
-        
         col_btn, col_search = st.columns([1, 4])
         with col_btn:
             if st.button("🔄 Update Market Data", use_container_width=True):
@@ -739,16 +952,11 @@ if app_mode == "Terminal (Analysis)":
                             if not data.empty and 'Close' in data:
                                 close_data = data['Close']
                                 for i, r in df_watchlist.iterrows():
-                                    ticker = r['Stock']
-                                    p = "Error"
+                                    ticker = r['Stock']; p = "Error"
                                     try:
-                                        if isinstance(close_data, pd.DataFrame) and ticker in close_data.columns:
-                                            p = round(float(close_data[ticker].dropna().iloc[-1]), 2)
-                                        elif isinstance(close_data, pd.Series): 
-                                            p = round(float(close_data.dropna().iloc[-1]), 2)
-                                    except:
-                                        p = get_current_price(ticker)
-                                        
+                                        if isinstance(close_data, pd.DataFrame) and ticker in close_data.columns: p = round(float(close_data[ticker].dropna().iloc[-1]), 2)
+                                        elif isinstance(close_data, pd.Series): p = round(float(close_data.dropna().iloc[-1]), 2)
+                                    except: p = get_current_price(ticker)
                                     if isinstance(p, (float, int)):
                                         df_watchlist.at[i, 'Market price'] = f"${p}"
                                         df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
@@ -758,9 +966,7 @@ if app_mode == "Terminal (Analysis)":
                                 if isinstance(p, float):
                                     df_watchlist.at[i, 'Market price'] = f"${p}"
                                     df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
-                                    
-                    save_db(df_watchlist)
-                    st.rerun()
+                    save_db(df_watchlist); st.rerun()
                     
         with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
 
@@ -770,49 +976,24 @@ if app_mode == "Terminal (Analysis)":
             display_df = display_df[mask]
         
         edited_df = st.data_editor(
-            display_df,
-            use_container_width=True, hide_index=True,
+            display_df, use_container_width=True, hide_index=True,
             column_config={
                 "Interest": st.column_config.SelectboxColumn("Interest", options=["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"], required=True),
                 "In Portfolio": st.column_config.CheckboxColumn("Portfolio", default=False),
-                "Shares": None,
-                "Avg Cost": None
+                "Shares": None, "Avg Cost": None
             },
             disabled=["Stock", "Company name", "Market price", "Intrinsic value", "Potential"]
         )
-        
-        if not edited_df.equals(display_df):
-            df_watchlist.update(edited_df)
-            save_db(df_watchlist)
-            st.rerun()
+        if not edited_df.equals(display_df): df_watchlist.update(edited_df); save_db(df_watchlist); st.rerun()
 
-    # --- PAGE 2: PROFILE ---
+    # --- PROFILE (ИСПОЛЬЗУЕТ ФРАГМЕНТ) ---
     with tab_profile:
         if selected_ticker and selected_ticker != "":
-            st.subheader(f"Market Chart: {selected_ticker}")
-            col_tf, col_int, _ = st.columns([1, 1, 2])
-            with col_tf: period_ui = st.selectbox("Period", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years"], index=2)
-            with col_int: interval_ui = st.selectbox("Interval", ["Daily", "Weekly", "Monthly"], index=0)
-            period_map = {"1 Month": "1mo", "6 Months": "6mo", "1 Year": "1y", "5 Years": "5y", "10 Years": "10y"}
-            interval_map = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
-
-            try:
-                stock_obj = yf.Ticker(selected_ticker)
-                df_h = stock_obj.history(period=period_map[period_ui], interval=interval_map[interval_ui])
-                if not df_h.empty:
-                    fig = go.Figure(data=[go.Candlestick(x=df_h.index, open=df_h['Open'], high=df_h['High'], low=df_h['Low'], close=df_h['Close'], increasing_line_color='#d4af37', decreasing_line_color='#8a7122')])
-                    iv_raw = df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'].values[0]
-                    try:
-                        iv_float = float(str(iv_raw).replace('$', '').replace(',', ''))
-                        if iv_float > 0:
-                            fig.add_hline(y=iv_float, line_dash="dash", line_color="#d4af37", annotation_text=f"Intrinsic Value: ${iv_float:,.2f}", annotation_position="bottom right", annotation_font_color="#d4af37")
-                    except: pass
-                    fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
-                    st.plotly_chart(fig, use_container_width=True)
-            except: st.error("Error fetching chart data.")
+            iv_raw = df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'].values[0]
+            render_company_profile(selected_ticker, iv_raw)
         else: st.warning("Your watchlist is empty.")
 
-    # --- PAGE 3: RATIOS (EXCEL + NWC) ---
+    # --- RATIOS ---
     with tab_ratios:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Financial Ratios: {selected_ticker}")
@@ -822,15 +1003,11 @@ if app_mode == "Terminal (Analysis)":
                 if 'Ratios' in xls.sheet_names:
                     df = pd.read_excel(path, sheet_name='Ratios')
                     key_metrics = extract_key_ratios(df)
-                    
                     if key_metrics:
                         latest_year = key_metrics.pop("_latest_year", "Latest")
-                        
                         with st.spinner("Calculating Net Working Capital..."):
                             live_ratios, _ = fetch_live_financials(selected_ticker)
-                            if live_ratios and "Net Working Capital" in live_ratios:
-                                key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
-                        
+                            if live_ratios and "Net Working Capital" in live_ratios: key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
                         st.write(f"**Key Performance Indicators ({latest_year})**")
                         cols = st.columns(5)
                         for i, (name, val) in enumerate(key_metrics.items()):
@@ -842,7 +1019,7 @@ if app_mode == "Terminal (Analysis)":
                 else: st.error("Sheet 'Ratios' not found.")
             else: st.info("No file attached for this company. Please upload an Excel file.")
             
-    # --- PAGE 4: VALUATION MODELS (From Excel) ---
+    # --- VALUATION MODELS ---
     with tab_val_models:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Valuation Overview: {selected_ticker}")
@@ -877,8 +1054,7 @@ if app_mode == "Terminal (Analysis)":
                                 if st.button(f"Sync Average ({item['Metric']}): ${avg_val:,.2f}", key=f"sync_xl_{selected_ticker}_{item['Metric']}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = avg_val
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), avg_val)
-                                    save_db(df_watchlist)
-                                    st.success(f"Watchlist updated!")
+                                    save_db(df_watchlist); st.success(f"Watchlist updated!")
                                 st.markdown("<hr>", unsafe_allow_html=True)
                         else: st.info("Could not extract Relative Valuation data.")
                     else:
@@ -894,8 +1070,7 @@ if app_mode == "Terminal (Analysis)":
                                 if st.button(f"Sync '{label}' (${val:,.2f}) to Watchlist", key=f"sync_xl_{selected_ticker}_{label}_{val}"):
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = val
                                     df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), val)
-                                    save_db(df_watchlist)
-                                    st.success(f"Watchlist updated!")
+                                    save_db(df_watchlist); st.success(f"Watchlist updated!")
                                 st.markdown("<br>", unsafe_allow_html=True)
                         else: st.info("Could not auto-detect final values in this sheet.")
                     st.markdown("<hr>", unsafe_allow_html=True)
@@ -903,7 +1078,7 @@ if app_mode == "Terminal (Analysis)":
                 else: st.warning("No Valuation models found in this file.")
             else: st.info("No file attached.")
 
-    # --- PAGE 5: COMPARE ---
+    # --- COMPARE ---
     with tab_compare:
         st.subheader("Peer Comparison Dashboard")
         if not df_watchlist.empty:
@@ -917,12 +1092,7 @@ if app_mode == "Terminal (Analysis)":
                         iv_val = row['Intrinsic value'].values[0] if not row.empty else "N/A"
                         try: formatted_iv = f"${float(iv_val):,.2f}" if pd.notna(iv_val) and iv_val != "" else "N/A"
                         except: formatted_iv = "N/A"
-                            
-                        comp_info = {
-                            "Market Price": str(row['Market price'].values[0]) if not row.empty else "N/A", 
-                            "Intrinsic Value": formatted_iv, 
-                            "Potential": str(row['Potential'].values[0]) if not row.empty else "N/A"
-                        }
+                        comp_info = {"Market Price": str(row['Market price'].values[0]) if not row.empty else "N/A", "Intrinsic Value": formatted_iv, "Potential": str(row['Potential'].values[0]) if not row.empty else "N/A"}
                         
                         path = os.path.join(FILES_DIR, f"{t}.xlsx")
                         if os.path.exists(path):
@@ -936,9 +1106,7 @@ if app_mode == "Terminal (Analysis)":
                             except: pass
                             
                         live_ratios, _ = fetch_live_financials(t)
-                        if live_ratios and "Net Working Capital" in live_ratios:
-                            comp_info["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
-                            
+                        if live_ratios and "Net Working Capital" in live_ratios: comp_info["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
                         compare_data[t] = comp_info
                 df_compare = pd.DataFrame(compare_data); df_compare.fillna("N/A", inplace=True)
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -946,7 +1114,7 @@ if app_mode == "Terminal (Analysis)":
             else: st.info("Select at least one company to see the comparison.")
         else: st.info("Your watchlist is empty. Add companies first.")
 
-    # --- PAGE 6: NOTES & EXPORT ---
+    # --- NOTES & EXPORT ---
     with tab_notes:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
@@ -956,102 +1124,25 @@ if app_mode == "Terminal (Analysis)":
                 with open(note_path, "r", encoding="utf-8") as f: existing_note = f.read()
                 
             new_note = st.text_area("Editor", value=existing_note, height=400, label_visibility="collapsed", key=f"note_editor_{selected_ticker}")
-            
             col_save, col_pdf = st.columns([1, 1])
             with col_save:
                 if st.button("💾 Save Notes", type="primary", use_container_width=True, key=f"save_btn_{selected_ticker}"):
                     with open(note_path, "w", encoding="utf-8") as f: f.write(new_note)
                     st.success("Investment notes saved securely!")
-            
             with col_pdf:
                 with st.spinner("Compiling Terminal Report..."):
                     ticker_state = get_safe_v_state(selected_ticker)
                     pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, ticker_state)
-                
-                st.download_button(
-                    label="📥 Export Terminal Report (PDF)",
-                    data=pdf_bytes,
-                    file_name=f"{selected_ticker}_Terminal_Report.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-        else:
-            st.warning("Your watchlist is empty.")
-
+                st.download_button(label="📥 Export Terminal Report (PDF)", data=pdf_bytes, file_name=f"{selected_ticker}_Terminal_Report.pdf", mime="application/pdf", use_container_width=True)
+        else: st.warning("Your watchlist is empty.")
 
 # ==========================================
-# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД 
+# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД (ИСПОЛЬЗУЕТ ФРАГМЕНТ)
 # ==========================================
 elif app_mode == "Macro Dashboard":
     render_header()
     st.subheader("🌍 Macroeconomic & Market Overview")
-    
-    col_macro_period, col_macro_interval, _ = st.columns([1, 1, 3])
-    with col_macro_period: 
-        m_period_ui = st.selectbox("Timeframe", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years", "Max"], index=4, key="macro_period")
-    with col_macro_interval: 
-        m_interval_ui = st.selectbox("Interval", ["Daily", "Weekly", "Monthly"], index=2, key="macro_interval")
-        
-    m_period_map = {"1 Month": "1mo", "6 Months": "6mo", "1 Year": "1y", "5 Years": "5y", "10 Years": "10y", "Max": "max"}
-    m_interval_map = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
-    
-    macro_symbols = {
-        "S&P 500": "^GSPC",
-        "NASDAQ": "^IXIC",
-        "Volatility (VIX)": "^VIX",
-        "10-Yr Treasury Yield": "^TNX"
-    }
-    
-    @st.cache_data(ttl=3600)
-    def fetch_macro_data(period, interval):
-        hist_data = {}
-        current_data = {}
-        for name, symbol in macro_symbols.items():
-            try:
-                tk = yf.Ticker(symbol)
-                hist = tk.history(period=period, interval=interval)
-                if not hist.empty and len(hist) > 1:
-                    hist = hist.dropna(subset=['Close'])
-                    hist_data[name] = hist['Close']
-                    
-                    current_price = hist['Close'].iloc[-1]
-                    prev_price = hist['Close'].iloc[-2]
-                    pct_change = ((current_price - prev_price) / prev_price) * 100
-                    
-                    if symbol == "^TNX":
-                        current_data[name] = {"val": f"{current_price:.2f}%", "change": f"{pct_change:+.2f}%"}
-                    else:
-                        current_data[name] = {"val": f"{current_price:,.2f}", "change": f"{pct_change:+.2f}%"}
-            except:
-                pass
-        return hist_data, current_data
-
-    with st.spinner("Fetching global market data..."):
-        macro_hist, macro_current = fetch_macro_data(m_period_map[m_period_ui], m_interval_map[m_interval_ui])
-        
-    if macro_current:
-        cols = st.columns(4)
-        for i, (name, data) in enumerate(macro_current.items()):
-            delta_col = "inverse" if name == "Volatility (VIX)" else "normal"
-            cols[i].metric(name, data['val'], data['change'], delta_color=delta_col)
-            
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.write(f"### {m_period_ui} Market Trends")
-        c1, c2 = st.columns(2)
-        
-        def plot_sparkline(series, title, color):
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=series.index, y=series.values, mode='lines', line=dict(color=color, width=2)))
-            fig.update_layout(title=title, height=250, margin=dict(l=0,r=0,t=30,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='rgba(212,175,55,0.1)'))
-            return fig
-
-        if "S&P 500" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["S&P 500"], "S&P 500 Index", "#d4af37"), use_container_width=True)
-        if "NASDAQ" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["NASDAQ"], "NASDAQ Composite", "#00d2ff"), use_container_width=True)
-        if "Volatility (VIX)" in macro_hist: c1.plotly_chart(plot_sparkline(macro_hist["Volatility (VIX)"], "VIX (Fear Index)", "#ff4b4b"), use_container_width=True)
-        if "10-Yr Treasury Yield" in macro_hist: c2.plotly_chart(plot_sparkline(macro_hist["10-Yr Treasury Yield"], "10-Yr Treasury Yield (%)", "#28a745"), use_container_width=True)
-    else:
-        st.error("Failed to fetch macroeconomic data.")
-
+    render_macro_section()
 
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
@@ -1059,9 +1150,7 @@ elif app_mode == "Macro Dashboard":
 elif app_mode == "My Portfolio":
     render_header()
     st.subheader("💼 My Portfolio Dashboard")
-    
     portfolio_df = df_watchlist[df_watchlist['In Portfolio'] == True].copy()
-    
     if not portfolio_df.empty:
         display_port = portfolio_df[['Stock', 'Company name', 'Shares', 'Avg Cost']].copy()
         display_port['Market price'] = portfolio_df['Market price'].apply(safe_float)
@@ -1075,12 +1164,10 @@ elif app_mode == "My Portfolio":
         total_pnl = total_value - total_cost
         total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
         
-        # Расчет дивидендов
         annual_div_income = 0.0
         for idx, row in display_port.iterrows():
             dy = fetch_dividend_yield(row['Stock'])
             annual_div_income += row['Total Value'] * dy
-
         portfolio_yield = (annual_div_income / total_value * 100) if total_value > 0 else 0.0
 
         m1, m2, m3, m4 = st.columns(4)
@@ -1090,16 +1177,13 @@ elif app_mode == "My Portfolio":
         m4.metric("Est. Annual Dividends", f"${annual_div_income:,.2f}", f"{portfolio_yield:.2f}% Yield", delta_color="off")
         
         st.markdown("<hr>", unsafe_allow_html=True)
-        
         st.write("### Portfolio Analytics")
         g1, g2 = st.columns(2)
-        
         with g1:
             if total_value > 0:
                 fig_pie = go.Figure(data=[go.Pie(labels=display_port['Stock'], values=display_port['Total Value'], hole=.4)])
                 fig_pie.update_layout(title="Asset Allocation", margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
                 st.plotly_chart(fig_pie, use_container_width=True)
-        
         with g2:
             if not display_port.empty:
                 colors = ['#28a745' if val > 0 else '#ff4b4b' for val in display_port['P&L ($)']]
@@ -1109,292 +1193,42 @@ elif app_mode == "My Portfolio":
                 
         st.markdown("<hr>", unsafe_allow_html=True)
         st.write("📝 **Edit your positions below:** (Update 'Shares' and 'Avg Cost')")
-        
         edit_df = display_port[['Stock', 'Company name', 'Market price', 'Shares', 'Avg Cost', 'Total Value', 'P&L ($)', 'P&L (%)']]
-        
         edited_port = st.data_editor(
-            edit_df,
-            use_container_width=True,
-            hide_index=True,
-            disabled=["Stock", "Company name", "Market price", "Total Value", "P&L ($)", "P&L (%)"],
+            edit_df, use_container_width=True, hide_index=True, disabled=["Stock", "Company name", "Market price", "Total Value", "P&L ($)", "P&L (%)"],
             column_config={
-                "Market price": st.column_config.NumberColumn(format="$%.2f"),
-                "Total Value": st.column_config.NumberColumn(format="$%.2f"),
-                "P&L ($)": st.column_config.NumberColumn(format="$%.2f"),
-                "P&L (%)": st.column_config.NumberColumn(format="%.2f%%"),
-                "Shares": st.column_config.NumberColumn(min_value=0.0, step=1.0),
-                "Avg Cost": st.column_config.NumberColumn("Avg Cost ($)", min_value=0.0, step=1.0, format="%.2f"),
+                "Market price": st.column_config.NumberColumn(format="$%.2f"), "Total Value": st.column_config.NumberColumn(format="$%.2f"),
+                "P&L ($)": st.column_config.NumberColumn(format="$%.2f"), "P&L (%)": st.column_config.NumberColumn(format="%.2f%%"),
+                "Shares": st.column_config.NumberColumn(min_value=0.0, step=1.0), "Avg Cost": st.column_config.NumberColumn("Avg Cost ($)", min_value=0.0, step=1.0, format="%.2f"),
             }
         )
-        
         if not edited_port[['Shares', 'Avg Cost']].equals(edit_df[['Shares', 'Avg Cost']]):
             for index, row in edited_port.iterrows():
                 stock = row['Stock']
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Shares'] = row['Shares']
                 df_watchlist.loc[df_watchlist['Stock'] == stock, 'Avg Cost'] = row['Avg Cost']
-            save_db(df_watchlist)
-            st.rerun()
-            
-    else:
-        st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
+            save_db(df_watchlist); st.rerun()
+    else: st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: VALUATION LAB 
+# РОУТИНГ: VALUATION LAB (ИСПОЛЬЗУЕТ ФРАГМЕНТЫ ДЛЯ КАЖДОГО МЕТОДА)
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
-    
     if not df_watchlist.empty:
         selected_ticker = st.selectbox("Select Company for Analysis", df_watchlist['Stock'].tolist())
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
-        
         ticker_state = get_safe_v_state(selected_ticker)
 
         col_title, col_pdf_btn = st.columns([3, 1])
-        with col_title:
-            st.write(f"Dynamic valuation models for **{selected_ticker}**.")
+        with col_title: st.write(f"Dynamic valuation models for **{selected_ticker}**.")
         with col_pdf_btn:
             pdf_bytes_val = generate_valuation_pdf(selected_ticker, ticker_state)
-            st.download_button(
-                label="📥 Export Valuation Report (PDF)",
-                data=pdf_bytes_val,
-                file_name=f"{selected_ticker}_Valuation_Lab.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.download_button(label="📥 Export Valuation Report (PDF)", data=pdf_bytes_val, file_name=f"{selected_ticker}_Valuation_Lab.pdf", mime="application/pdf", use_container_width=True)
 
-        tab_ddm, tab_dcf, tab_rel = st.tabs([
-            "1. Gordon Growth Model (DDM)", 
-            "2. Multi-Stage Discounted Cash Flow (DCF)", 
-            "3. Relative Valuation (Multiples)"
-        ])
-        
-        # ------------------------------------------
-        # МЕТОД 1: GORDON GROWTH MODEL (DDM)
-        # ------------------------------------------
-        with tab_ddm:
-            col_inputs, col_results = st.columns([1, 2], gap="large")
-            with col_inputs:
-                st.markdown("#### ⚙️ DDM Assumptions")
-                ticker_state['ddm_div'] = st.number_input("Current Annual Dividend per Share ($)", value=float(ticker_state['ddm_div']), step=0.1)
-                ticker_state['ddm_g'] = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(ticker_state['ddm_g']), step=0.1, format="%f%%")
-                ticker_state['ddm_ke'] = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(ticker_state['ddm_ke']), step=0.5, format="%f%%")
-                
-                div_0 = ticker_state['ddm_div']
-                g_div = ticker_state['ddm_g'] / 100
-                ke = ticker_state['ddm_ke'] / 100
-            
-            with col_results:
-                st.markdown("#### 📊 DDM Valuation")
-                if ke <= g_div:
-                    st.error("Error: Cost of Equity must be strictly greater than the Dividend Growth Rate for the Gordon model to work.")
-                    intrinsic_value = 0.0
-                else:
-                    intrinsic_value = div_0 * (1 + g_div) / (ke - g_div)
-                    m1, m2 = st.columns(2)
-                    m1.metric("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):.2f}")
-                    
-                    if current_p > 0:
-                        upside = ((intrinsic_value - current_p) / current_p) * 100
-                        m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
-                    else:
-                        m2.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Sync DDM Value to Watchlist", type="primary", use_container_width=True, disabled=(intrinsic_value==0), key=f"sync_ddm_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
-                    save_db(df_watchlist)
-                    st.success(f"Watchlist updated!")
-            
-            st.markdown("""
-                <div class="guide-box">
-                    <h4>💡 Шпаргалка аналитика: Gordon Growth Model (DDM)</h4>
-                    <ul>
-                        <li><b>Когда использовать:</b> Для зрелых компаний, которые стабильно платят дивиденды и имеют четкую дивидендную политику. Предполагается, что дивиденды будут расти постоянным темпом вечно.</li>
-                        <li><b>Идеальные кандидаты:</b> Коммунальные предприятия (Utilities), телекоммуникации (AT&T, Verizon), крупные банки (JPMorgan), устоявшиеся потребительские бренды (Coca-Cola, P&G).</li>
-                        <li><b>Когда НЕ использовать:</b> Для компаний, которые не платят дивиденды (Amazon, Meta) или для быстрорастущих стартапов.</li>
-                    </ul>
-                </div>
-            """, unsafe_allow_html=True)
-
-        # ------------------------------------------
-        # МЕТОД 2: MULTI-STAGE DCF (FCFF)
-        # ------------------------------------------
-        with tab_dcf:
-            col_inputs, col_results = st.columns([1, 2], gap="large")
-            with col_inputs:
-                st.markdown("#### ⚙️ DCF Assumptions")
-                ticker_state['dcf_fcf'] = st.number_input("Base Free Cash Flow (FCF) $M", value=float(ticker_state['dcf_fcf']), step=100.0)
-                ticker_state['dcf_g'] = st.slider("FCF Growth Rate (Years 1-5)", min_value=-20.0, max_value=50.0, value=float(ticker_state['dcf_g']), step=1.0, format="%f%%")
-                ticker_state['dcf_tg'] = st.slider("Terminal Growth Rate (Perpetual)", min_value=0.0, max_value=10.0, value=float(ticker_state['dcf_tg']), step=0.1, format="%f%%")
-                ticker_state['dcf_wacc'] = st.slider("Discount Rate (WACC)", min_value=1.0, max_value=25.0, value=float(ticker_state['dcf_wacc']), step=0.5, format="%f%%")
-                
-                st.markdown("#### 🏢 Capital Structure")
-                ticker_state['dcf_shares'] = st.number_input("Shares Outstanding (Millions)", value=float(ticker_state['dcf_shares']), step=10.0)
-                ticker_state['dcf_debt'] = st.number_input("Net Debt $M (Total Debt - Cash)", value=float(ticker_state['dcf_debt']), step=100.0)
-                
-                fcf_base = ticker_state['dcf_fcf']
-                growth_rate = ticker_state['dcf_g'] / 100
-                terminal_growth = ticker_state['dcf_tg'] / 100
-                wacc = ticker_state['dcf_wacc'] / 100
-                shares_out_dcf = ticker_state['dcf_shares']
-                net_debt_dcf = ticker_state['dcf_debt']
-                
-            with col_results:
-                st.markdown("#### 📊 DCF Projections & Valuation")
-                fcfs, pvs = [], []
-                years = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
-                
-                for year in range(1, 6):
-                    fcf = fcf_base * ((1 + growth_rate) ** year)
-                    pv = fcf / ((1 + wacc) ** year)
-                    fcfs.append(fcf); pvs.append(pv)
-                    
-                terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
-                pv_tv = terminal_value / ((1 + wacc) ** 5)
-                
-                enterprise_val = sum(pvs) + pv_tv
-                equity_val = enterprise_val - net_debt_dcf
-                intrinsic_value = equity_val / shares_out_dcf if shares_out_dcf > 0 else 0
-                
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Enterprise Value", f"${enterprise_val:,.1f} M")
-                m2.metric("Equity Value", f"${equity_val:,.1f} M")
-                
-                if current_p > 0:
-                    upside = ((intrinsic_value - current_p) / current_p) * 100
-                    m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}", f"{upside:+.2f}% Upside", delta_color="normal")
-                else:
-                    m3.metric("Intrinsic Value per Share", f"${intrinsic_value:,.2f}")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                fig_dcf = go.Figure()
-                fig_dcf.add_trace(go.Bar(x=years, y=fcfs, name='Projected FCF', marker_color='#b38200'))
-                fig_dcf.add_trace(go.Bar(x=years, y=pvs, name='Present Value (Discounted)', marker_color='#d4af37'))
-                fig_dcf.update_layout(title="Cash Flow Projections (Next 5 Years)", barmode='group', height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), font=dict(color='#e0d8c8'))
-                st.plotly_chart(fig_dcf, use_container_width=True)
-                
-                if st.button("💾 Sync DCF Value to Watchlist", type="primary", use_container_width=True, key=f"sync_dcf_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = intrinsic_value
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
-                    save_db(df_watchlist)
-                    st.success(f"Watchlist updated!")
-                    
-            st.markdown("""
-                <div class="guide-box">
-                    <h4>💡 Шпаргалка аналитика: Discounted Cash Flow (DCF)</h4>
-                    <ul>
-                        <li><b>Когда использовать:</b> Золотой стандарт оценки. Используется, когда компания генерирует стабильный и прогнозируемый свободный денежный поток (Free Cash Flow).</li>
-                        <li><b>Идеальные кандидаты:</b> Технологические гиганты (Apple, Microsoft), производственные компании, крупные ритейлеры (Walmart).</li>
-                        <li><b>Когда НЕ использовать:</b> Для банков и страховых компаний, а также для сверх-рискованных стартапов без денежного потока.</li>
-                    </ul>
-                </div>
-            """, unsafe_allow_html=True)
-
-        # ------------------------------------------
-        # МЕТОД 3: RELATIVE VALUATION
-        # ------------------------------------------
-        with tab_rel:
-            
-            # --- 3A. P/E ---
-            st.markdown("### 3A. Price-to-Earnings (P/E) Multiple")
-            c1, c2 = st.columns([1, 2], gap="large")
-            with c1:
-                ticker_state['rel_eps'] = st.number_input("Company EPS ($)", value=float(ticker_state['rel_eps']), step=0.5)
-                ticker_state['rel_pe'] = st.number_input("Target P/E Multiple (Industry Avg)", value=float(ticker_state['rel_pe']), step=1.0)
-            with c2:
-                base_eps = ticker_state['rel_eps']
-                target_pe = ticker_state['rel_pe']
-                int_pe = base_eps * target_pe
-                st.info(f"**Formula:** Implied Share Price = EPS ({base_eps}) × Target P/E ({target_pe})")
-                
-                m1, _ = st.columns(2)
-                if current_p > 0:
-                    upside_pe = ((int_pe - current_p) / current_p) * 100
-                    m1.metric("Implied Value per Share", f"${int_pe:,.2f}", f"{upside_pe:+.2f}% Upside", delta_color="normal")
-                else:
-                    m1.metric("Implied Value per Share", f"${int_pe:,.2f}")
-                
-                if st.button("💾 Sync P/E Value to Watchlist", type="primary", use_container_width=True, disabled=(int_pe<=0), key=f"sync_pe_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_pe
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_pe)
-                    save_db(df_watchlist)
-                    st.success(f"Watchlist updated with P/E method!")
-            
-            st.markdown("<hr>", unsafe_allow_html=True)
-
-            # --- 3B. EV/EBITDA ---
-            st.markdown("### 3B. EV/EBITDA Multiple")
-            c1, c2 = st.columns([1, 2], gap="large")
-            with c1:
-                ticker_state['rel_ebitda'] = st.number_input("Company EBITDA $M", value=float(ticker_state['rel_ebitda']), step=50.0)
-                ticker_state['rel_eveb'] = st.number_input("Target EV/EBITDA Multiple", value=float(ticker_state['rel_eveb']), step=1.0)
-                ticker_state['rel_sh1'] = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh1']), step=10.0, key="sh_ebitda")
-                ticker_state['rel_nd1'] = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd1']), step=50.0, key="nd_ebitda")
-            with c2:
-                base_ebitda = ticker_state['rel_ebitda']
-                target_eveb = ticker_state['rel_eveb']
-                sh_ebitda = ticker_state['rel_sh1']
-                nd_ebitda = ticker_state['rel_nd1']
-                
-                ev_ebitda = base_ebitda * target_eveb
-                eq_ebitda = ev_ebitda - nd_ebitda
-                int_ebitda = eq_ebitda / sh_ebitda if sh_ebitda > 0 else 0
-                
-                st.info(f"**Formula:** Implied EV = EBITDA ({base_ebitda}) × EV/EBITDA ({target_eveb}) = {ev_ebitda} M<br>Equity Value = EV ({ev_ebitda}) - Net Debt ({nd_ebitda}) = {eq_ebitda} M")
-                
-                m1, _ = st.columns(2)
-                if current_p > 0:
-                    upside_eb = ((int_ebitda - current_p) / current_p) * 100
-                    m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}", f"{upside_eb:+.2f}% Upside", delta_color="normal")
-                else:
-                    m1.metric("Implied Value per Share", f"${int_ebitda:,.2f}")
-                
-                if st.button("💾 Sync EV/EBITDA Value to Watchlist", type="primary", use_container_width=True, disabled=(int_ebitda<=0), key=f"sync_eveb_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_ebitda
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_ebitda)
-                    save_db(df_watchlist)
-                    st.success(f"Watchlist updated with EV/EBITDA method!")
-
-            st.markdown("<hr>", unsafe_allow_html=True)
-            
-            # --- 3C. EV/Sales ---
-            st.markdown("### 3C. EV/Sales (Revenue) Multiple")
-            c1, c2 = st.columns([1, 2], gap="large")
-            with c1:
-                ticker_state['rel_rev'] = st.number_input("Company Revenue $M", value=float(ticker_state['rel_rev']), step=100.0)
-                ticker_state['rel_evs'] = st.number_input("Target EV/Sales Multiple", value=float(ticker_state['rel_evs']), step=0.5)
-                ticker_state['rel_sh2'] = st.number_input("Shares Outstanding (M)", value=float(ticker_state['rel_sh2']), step=10.0, key="sh_rev")
-                ticker_state['rel_nd2'] = st.number_input("Net Debt $M", value=float(ticker_state['rel_nd2']), step=50.0, key="nd_rev")
-            with c2:
-                base_rev = ticker_state['rel_rev']
-                target_evs = ticker_state['rel_evs']
-                sh_rev = ticker_state['rel_sh2']
-                nd_rev = ticker_state['rel_nd2']
-                
-                ev_rev = base_rev * target_evs
-                eq_rev = ev_rev - nd_rev
-                int_rev = eq_rev / sh_rev if sh_rev > 0 else 0
-                
-                st.info(f"**Formula:** Implied EV = Revenue ({base_rev}) × EV/Sales ({target_evs}) = {ev_rev} M<br>Equity Value = EV ({ev_rev}) - Net Debt ({nd_rev}) = {eq_rev} M")
-                
-                m1, _ = st.columns(2)
-                if current_p > 0:
-                    upside_rev = ((int_rev - current_p) / current_p) * 100
-                    m1.metric("Implied Value per Share", f"${int_rev:,.2f}", f"{upside_rev:+.2f}% Upside", delta_color="normal")
-                else:
-                    m1.metric("Implied Value per Share", f"${int_rev:,.2f}")
-                
-                if st.button("💾 Sync EV/Sales Value to Watchlist", type="primary", use_container_width=True, disabled=(int_rev<=0), key=f"sync_evs_{selected_ticker}"):
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'] = int_rev
-                    df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Potential'] = calculate_potential(str(current_p), int_rev)
-                    save_db(df_watchlist)
-                    st.success(f"Watchlist updated with EV/Sales method!")
-
-        val_db[selected_ticker] = ticker_state
-        save_val_db(val_db)
-
-    else:
-        st.warning("Your watchlist is empty. Add a company in the Terminal first.")
+        tab_ddm, tab_dcf, tab_rel = st.tabs(["1. Gordon Growth Model (DDM)", "2. Multi-Stage Discounted Cash Flow (DCF)", "3. Relative Valuation (Multiples)"])
+        with tab_ddm: render_ddm_lab(selected_ticker, current_p, ticker_state)
+        with tab_dcf: render_dcf_lab(selected_ticker, current_p, ticker_state)
+        with tab_rel: render_relative_lab(selected_ticker, current_p, ticker_state)
+    else: st.warning("Your watchlist is empty. Add a company in the Terminal first.")
