@@ -89,7 +89,7 @@ div[data-testid="stDataFrame"] { background-color: transparent !important; }
 st.markdown(css_code, unsafe_allow_html=True)
 
 # ==========================================
-# CORE FUNCTIONS & FULL PDF GENERATOR
+# CORE FUNCTIONS & PDF GENERATORS
 # ==========================================
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
@@ -110,14 +110,16 @@ NOTES_DIR = "notes"
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
+# ---------------------------------------------------------
+# PDF 1: TERMINAL REPORT (Избавлен от Valuation Lab)
+# ---------------------------------------------------------
 def generate_full_pdf_report(ticker, df_watchlist, v_state):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # 0. HEADER
     pdf.set_font("Arial", 'B', 20)
-    pdf.set_text_color(212, 175, 55) # Gold
+    pdf.set_text_color(212, 175, 55)
     pdf.cell(0, 15, f"Pax Investment Report: {ticker}", ln=True, align='C')
     pdf.line(10, 25, 200, 25)
     pdf.ln(5)
@@ -135,13 +137,12 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
         pdf.set_text_color(0, 0, 0)
         pdf.ln(3)
 
-    # 1. COMPANY PROFILE (CHART)
+    # 1. PROFILE
     section_title("1. Company Profile (1-Year Market Chart)")
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
         if not hist.empty:
-            # Создаем временный график через Matplotlib для PDF
             fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(hist.index, hist['Close'], color='#d4af37', linewidth=2)
             ax.set_title(f"{ticker} - Historical Price", color='black')
@@ -158,18 +159,17 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
             pdf.ln(5)
         else:
             no_info()
-    except Exception as e:
+    except Exception:
         pdf.set_font("Arial", '', 11)
         pdf.cell(0, 8, f"Chart unavailable. Data fetch error.", ln=True)
         pdf.ln(3)
 
-    # 2. FINANCIAL RATIOS
+    # 2. RATIOS
     section_title("2. Financial Ratios")
     path = os.path.join(FILES_DIR, f"{ticker}.xlsx")
     ratios_found = False
     metrics = {}
     
-    # Check Excel
     if os.path.exists(path):
         xls = pd.ExcelFile(path)
         if 'Ratios' in xls.sheet_names:
@@ -180,7 +180,6 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
                 metrics.update(key_metrics)
                 ratios_found = True
 
-    # Check Live NWC
     live_ratios, _ = fetch_live_financials(ticker)
     if live_ratios and "Net Working Capital" in live_ratios:
         metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
@@ -188,7 +187,6 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
 
     if ratios_found and metrics:
         pdf.set_font("Arial", '', 11)
-        # Устанавливаем цвета для таблицы
         pdf.set_fill_color(245, 245, 245)
         fill = False
         for k, v in metrics.items():
@@ -199,43 +197,8 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
     else:
         no_info()
 
-    # 3. VALUATION MODELS
-    section_title("3. Valuation Models & Results")
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 8, "A. Valuation Lab (Calculated Outputs):", ln=True)
-    pdf.set_font("Arial", '', 11)
-    
-    # Расчет текущих метрик из Valuation Lab (из v_state)
-    div_0 = v_state.get('ddm_div', 0)
-    g_div = v_state.get('ddm_g', 0) / 100
-    ke = v_state.get('ddm_ke', 1) / 100
-    ddm_val = div_0 * (1 + g_div) / (ke - g_div) if ke > g_div else 0
-
-    fcf_base = v_state.get('dcf_fcf', 0)
-    growth_rate = v_state.get('dcf_g', 0) / 100
-    terminal_growth = v_state.get('dcf_tg', 0) / 100
-    wacc = v_state.get('dcf_wacc', 1) / 100
-    shares_out = v_state.get('dcf_shares', 1)
-    net_debt = v_state.get('dcf_debt', 0)
-    fcfs, pvs = [], []
-    for year in range(1, 6):
-        fcf = fcf_base * ((1 + growth_rate) ** year)
-        pv = fcf / ((1 + wacc) ** year)
-        fcfs.append(fcf); pvs.append(pv)
-    terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
-    pv_tv = terminal_value / ((1 + wacc) ** 5)
-    enterprise_val = sum(pvs) + pv_tv
-    equity_val = enterprise_val - net_debt
-    dcf_val = equity_val / shares_out if shares_out > 0 else 0
-
-    pdf.cell(100, 8, "Gordon Growth Model (DDM)", border=1)
-    pdf.cell(80, 8, f"${ddm_val:,.2f}" if ddm_val > 0 else "N/A", border=1, ln=True)
-    pdf.cell(100, 8, "Discounted Cash Flow (DCF)", border=1)
-    pdf.cell(80, 8, f"${dcf_val:,.2f}" if dcf_val > 0 else "N/A", border=1, ln=True)
-    pdf.ln(3)
-
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 8, "B. Excel-based Valuation Targets:", ln=True)
+    # 3. VALUATION MODELS (Только из Excel)
+    section_title("3. Valuation Targets (Excel Models)")
     pdf.set_font("Arial", '', 11)
     if os.path.exists(path):
         xls = pd.ExcelFile(path)
@@ -266,7 +229,7 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
         no_info()
     pdf.ln(3)
 
-    # 4. COMPARISON RESULTS
+    # 4. COMPARISON
     section_title("4. Watchlist Comparison Summary")
     if not df_watchlist.empty:
         pdf.set_font("Arial", 'B', 10)
@@ -303,6 +266,151 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
         no_info()
 
     return pdf.output(dest='S').encode('latin-1')
+
+# ---------------------------------------------------------
+# PDF 2: VALUATION LAB REPORT (НОВЫЙ)
+# ---------------------------------------------------------
+def generate_valuation_pdf(ticker, v_state):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # HEADER
+    pdf.set_font("Arial", 'B', 20)
+    pdf.set_text_color(212, 175, 55) # Gold
+    pdf.cell(0, 15, f"Pax Valuation Laboratory: {ticker}", ln=True, align='C')
+    pdf.line(10, 25, 200, 25)
+    pdf.ln(5)
+
+    def section_header(title):
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_text_color(212, 175, 55) # Gold titles
+        pdf.cell(0, 10, title, ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(2)
+        
+    def add_row(key, val, is_header=False, fill=False):
+        if is_header:
+            pdf.set_font("Arial", 'B', 11)
+            pdf.set_fill_color(220, 220, 220)
+        else:
+            pdf.set_font("Arial", '', 11)
+            pdf.set_fill_color(245, 245, 245)
+            
+        pdf.cell(110, 8, str(key), border=1, fill=fill or is_header)
+        pdf.cell(70, 8, str(val), border=1, ln=True, align='R', fill=fill or is_header)
+
+    # --- METHOD 1: DDM ---
+    section_header("Method 1: Gordon Growth Model (DDM)")
+    div_0 = v_state.get('ddm_div', 0)
+    g_div = v_state.get('ddm_g', 0) / 100
+    ke = v_state.get('ddm_ke', 1) / 100
+    ddm_val = div_0 * (1 + g_div) / (ke - g_div) if ke > g_div else 0
+
+    add_row("Inputs (Assumptions)", "", is_header=True)
+    add_row("Current Annual Dividend ($)", f"${div_0:,.2f}", fill=False)
+    add_row("Expected Dividend Growth", f"{g_div*100:.1f}%", fill=True)
+    add_row("Cost of Equity", f"{ke*100:.1f}%", fill=False)
+    
+    add_row("Outputs (Results)", "", is_header=True)
+    add_row("Projected Next Dividend (D1)", f"${div_0 * (1 + g_div):,.2f}", fill=False)
+    add_row("Intrinsic Value per Share", f"${ddm_val:,.2f}" if ddm_val > 0 else "Error (Ke <= G)", fill=True)
+    pdf.ln(8)
+
+    # --- METHOD 2: DCF ---
+    section_header("Method 2: Multi-Stage DCF")
+    fcf_base = v_state.get('dcf_fcf', 0)
+    growth_rate = v_state.get('dcf_g', 0) / 100
+    terminal_growth = v_state.get('dcf_tg', 0) / 100
+    wacc = v_state.get('dcf_wacc', 1) / 100
+    shares_out = v_state.get('dcf_shares', 1)
+    net_debt = v_state.get('dcf_debt', 0)
+    
+    fcfs, pvs = [], []
+    for year in range(1, 6):
+        fcf = fcf_base * ((1 + growth_rate) ** year)
+        pv = fcf / ((1 + wacc) ** year)
+        fcfs.append(fcf); pvs.append(pv)
+    terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
+    pv_tv = terminal_value / ((1 + wacc) ** 5)
+    enterprise_val = sum(pvs) + pv_tv
+    equity_val = enterprise_val - net_debt
+    dcf_val = equity_val / shares_out if shares_out > 0 else 0
+
+    add_row("Inputs (Assumptions)", "", is_header=True)
+    add_row("Base Free Cash Flow ($M)", f"${fcf_base:,.1f}", fill=False)
+    add_row("FCF Growth Rate (Y1-5)", f"{growth_rate*100:.1f}%", fill=True)
+    add_row("Terminal Growth Rate", f"{terminal_growth*100:.1f}%", fill=False)
+    add_row("Discount Rate (WACC)", f"{wacc*100:.1f}%", fill=True)
+    add_row("Shares Outstanding (M)", f"{shares_out:,.1f}", fill=False)
+    add_row("Net Debt ($M)", f"${net_debt:,.1f}", fill=True)
+
+    add_row("Outputs (Results)", "", is_header=True)
+    add_row("Enterprise Value ($M)", f"${enterprise_val:,.1f}", fill=False)
+    add_row("Equity Value ($M)", f"${equity_val:,.1f}", fill=True)
+    add_row("Intrinsic Value per Share", f"${dcf_val:,.2f}", fill=False)
+    pdf.ln(8)
+
+    # --- METHOD 3: RELATIVE ---
+    section_header("Method 3: Relative Valuation")
+    metric_choice = v_state.get('rel_choice', "Earnings per Share (EPS)")
+    
+    add_row("Inputs (Assumptions)", "", is_header=True)
+    add_row("Chosen Metric", metric_choice, fill=False)
+    
+    if metric_choice == "Earnings per Share (EPS)":
+        base_metric = v_state.get('rel_eps', 0)
+        target_multiple = v_state.get('rel_pe', 0)
+        intrinsic_value = base_metric * target_multiple
+        
+        add_row("Company EPS ($)", f"${base_metric:,.2f}", fill=True)
+        add_row("Target P/E Multiple", f"{target_multiple:,.2f}x", fill=False)
+        add_row("Outputs (Results)", "", is_header=True)
+        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
+        
+    elif metric_choice == "EBITDA $M":
+        base_metric = v_state.get('rel_ebitda', 0)
+        target_multiple = v_state.get('rel_eveb', 0)
+        shares_out_rel = v_state.get('rel_sh1', 1)
+        net_debt_rel = v_state.get('rel_nd1', 0)
+        implied_ev = base_metric * target_multiple
+        implied_equity = implied_ev - net_debt_rel
+        intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
+        
+        add_row("Company EBITDA ($M)", f"${base_metric:,.1f}", fill=True)
+        add_row("Target EV/EBITDA Multiple", f"{target_multiple:,.2f}x", fill=False)
+        add_row("Shares Outstanding (M)", f"{shares_out_rel:,.1f}", fill=True)
+        add_row("Net Debt ($M)", f"${net_debt_rel:,.1f}", fill=False)
+        
+        add_row("Outputs (Results)", "", is_header=True)
+        add_row("Implied Enterprise Value ($M)", f"${implied_ev:,.1f}", fill=False)
+        add_row("Implied Equity Value ($M)", f"${implied_equity:,.1f}", fill=True)
+        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
+
+    elif metric_choice == "Revenue $M":
+        base_metric = v_state.get('rel_rev', 0)
+        target_multiple = v_state.get('rel_evs', 0)
+        shares_out_rel = v_state.get('rel_sh2', 1)
+        net_debt_rel = v_state.get('rel_nd2', 0)
+        implied_ev = base_metric * target_multiple
+        implied_equity = implied_ev - net_debt_rel
+        intrinsic_value = implied_equity / shares_out_rel if shares_out_rel > 0 else 0
+        
+        add_row("Company Revenue ($M)", f"${base_metric:,.1f}", fill=True)
+        add_row("Target EV/Sales Multiple", f"{target_multiple:,.2f}x", fill=False)
+        add_row("Shares Outstanding (M)", f"{shares_out_rel:,.1f}", fill=True)
+        add_row("Net Debt ($M)", f"${net_debt_rel:,.1f}", fill=False)
+        
+        add_row("Outputs (Results)", "", is_header=True)
+        add_row("Implied Enterprise Value ($M)", f"${implied_ev:,.1f}", fill=False)
+        add_row("Implied Equity Value ($M)", f"${implied_equity:,.1f}", fill=True)
+        add_row("Implied Value per Share", f"${intrinsic_value:,.2f}", fill=False)
+
+    return pdf.output(dest='S').encode('latin-1')
+
+# ---------------------------------------------------------
+# REST OF APP FUNCTIONS
+# ---------------------------------------------------------
 
 @st.cache_data(ttl=3600)
 def search_company(query):
@@ -692,7 +800,6 @@ if app_mode == "Terminal (Analysis)":
                     if key_metrics:
                         latest_year = key_metrics.pop("_latest_year", "Latest")
                         
-                        # Live NWC injection
                         with st.spinner("Calculating Net Working Capital..."):
                             live_ratios, _ = fetch_live_financials(selected_ticker)
                             if live_ratios and "Net Working Capital" in live_ratios:
@@ -813,7 +920,7 @@ if app_mode == "Terminal (Analysis)":
             else: st.info("Select at least one company to see the comparison.")
         else: st.info("Your watchlist is empty. Add companies first.")
 
-    # --- PAGE 6: NOTES & PDF EXPORT ---
+    # --- PAGE 6: NOTES & EXPORT ---
     with tab_notes:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"📝 Investment Thesis & Notes: {selected_ticker}")
@@ -831,30 +938,27 @@ if app_mode == "Terminal (Analysis)":
                     st.success("Investment notes saved securely!")
             
             with col_pdf:
-                # ГЕНЕРАЦИЯ ОБНОВЛЕННОГО ПОЛНОГО PDF
-                current_p = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
-                
-                with st.spinner("Compiling full PDF Report..."):
+                with st.spinner("Compiling Terminal Report..."):
                     pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, st.session_state.v_state)
                 
                 st.download_button(
-                    label="📥 Export Full PDF Report",
+                    label="📥 Export Terminal Report (PDF)",
                     data=pdf_bytes,
-                    file_name=f"{selected_ticker}_Pax_Full_Report.pdf",
+                    file_name=f"{selected_ticker}_Terminal_Report.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
         else:
             st.warning("Your watchlist is empty.")
 
+
 # ==========================================
-# НОВЫЙ РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД С НАСТРОЙКОЙ
+# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД
 # ==========================================
 elif app_mode == "Macro Dashboard":
     render_header()
     st.subheader("🌍 Macroeconomic & Market Overview")
     
-    # Селекторы периода и интервала
     col_macro_period, col_macro_interval, _ = st.columns([1, 1, 3])
     with col_macro_period: 
         m_period_ui = st.selectbox("Timeframe", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years", "Max"], index=4, key="macro_period")
@@ -985,14 +1089,25 @@ elif app_mode == "My Portfolio":
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
-    st.subheader("🔬 Valuation Laboratory")
     
     if not df_watchlist.empty:
         selected_ticker = st.selectbox("Select Company for Analysis", df_watchlist['Stock'].tolist())
-        st.write(f"Dynamic valuation models for **{selected_ticker}**.")
-        
         current_price_str = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
         current_p = safe_float(current_price_str)
+
+        # ДОБАВЛЕНА КНОПКА ГЕНЕРАЦИИ PDF ОТЧЕТА VALUATION LAB
+        col_title, col_pdf_btn = st.columns([3, 1])
+        with col_title:
+            st.write(f"Dynamic valuation models for **{selected_ticker}**.")
+        with col_pdf_btn:
+            pdf_bytes_val = generate_valuation_pdf(selected_ticker, st.session_state.v_state)
+            st.download_button(
+                label="📥 Export Valuation Report (PDF)",
+                data=pdf_bytes_val,
+                file_name=f"{selected_ticker}_Valuation_Lab.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
 
         tab_ddm, tab_dcf, tab_rel = st.tabs([
             "1. Gordon Growth Model (DDM)", 
