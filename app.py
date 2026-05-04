@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import json
 import base64
 from fpdf import FPDF
+import matplotlib.pyplot as plt
 
 # ==========================================
 # 1. PAGE CONFIG & PREMIUM CSS DESIGN
@@ -88,7 +89,7 @@ div[data-testid="stDataFrame"] { background-color: transparent !important; }
 st.markdown(css_code, unsafe_allow_html=True)
 
 # ==========================================
-# CORE FUNCTIONS & PDF GENERATOR
+# CORE FUNCTIONS & FULL PDF GENERATOR
 # ==========================================
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
@@ -109,31 +110,198 @@ NOTES_DIR = "notes"
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
-def generate_pdf_report(ticker, current_price, intrinsic_value, notes):
+def generate_full_pdf_report(ticker, df_watchlist, v_state):
     pdf = FPDF()
     pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # 0. HEADER
     pdf.set_font("Arial", 'B', 20)
-    pdf.set_text_color(212, 175, 55) 
-    pdf.cell(0, 15, f"Pax Investment Report: {ticker}", 0, 1, 'C')
+    pdf.set_text_color(212, 175, 55) # Gold
+    pdf.cell(0, 15, f"Pax Investment Report: {ticker}", ln=True, align='C')
     pdf.line(10, 25, 200, 25)
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 14)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 10, "Valuation Summary", 0, 1)
-    pdf.set_font("Arial", '', 12)
-    pdf.cell(50, 10, "Market Price:", 0, 0)
+    pdf.ln(5)
+
+    def section_title(title):
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, title, ln=True)
+        pdf.ln(2)
+
+    def no_info():
+        pdf.set_font("Arial", 'I', 11)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 8, "No information available at the moment.", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(3)
+
+    # 1. COMPANY PROFILE (CHART)
+    section_title("1. Company Profile (1-Year Market Chart)")
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1y")
+        if not hist.empty:
+            # Создаем временный график через Matplotlib для PDF
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(hist.index, hist['Close'], color='#d4af37', linewidth=2)
+            ax.set_title(f"{ticker} - Historical Price", color='black')
+            ax.grid(True, alpha=0.3)
+            ax.set_facecolor('#ffffff')
+            fig.patch.set_facecolor('#ffffff')
+            
+            chart_path = f"temp_chart_{ticker}.png"
+            plt.savefig(chart_path, bbox_inches='tight', dpi=150)
+            plt.close(fig)
+            
+            pdf.image(chart_path, x=15, w=180)
+            os.remove(chart_path)
+            pdf.ln(5)
+        else:
+            no_info()
+    except Exception as e:
+        pdf.set_font("Arial", '', 11)
+        pdf.cell(0, 8, f"Chart unavailable. Data fetch error.", ln=True)
+        pdf.ln(3)
+
+    # 2. FINANCIAL RATIOS
+    section_title("2. Financial Ratios")
+    path = os.path.join(FILES_DIR, f"{ticker}.xlsx")
+    ratios_found = False
+    metrics = {}
+    
+    # Check Excel
+    if os.path.exists(path):
+        xls = pd.ExcelFile(path)
+        if 'Ratios' in xls.sheet_names:
+            df_r = pd.read_excel(xls, sheet_name='Ratios')
+            key_metrics = extract_key_ratios(df_r)
+            if key_metrics:
+                key_metrics.pop("_latest_year", None)
+                metrics.update(key_metrics)
+                ratios_found = True
+
+    # Check Live NWC
+    live_ratios, _ = fetch_live_financials(ticker)
+    if live_ratios and "Net Working Capital" in live_ratios:
+        metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
+        ratios_found = True
+
+    if ratios_found and metrics:
+        pdf.set_font("Arial", '', 11)
+        # Устанавливаем цвета для таблицы
+        pdf.set_fill_color(245, 245, 245)
+        fill = False
+        for k, v in metrics.items():
+            pdf.cell(100, 8, str(k), border=1, fill=fill)
+            pdf.cell(80, 8, str(v), border=1, ln=True, fill=fill)
+            fill = not fill
+        pdf.ln(5)
+    else:
+        no_info()
+
+    # 3. VALUATION MODELS
+    section_title("3. Valuation Models & Results")
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, str(current_price), 0, 1)
-    pdf.set_font("Arial", '', 12)
-    pdf.cell(50, 10, "Intrinsic Value:", 0, 0)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, f"${intrinsic_value:,.2f}" if isinstance(intrinsic_value, (int, float)) else str(intrinsic_value), 0, 1)
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Analyst Notes & Thesis", 0, 1)
+    pdf.cell(0, 8, "A. Valuation Lab (Calculated Outputs):", ln=True)
     pdf.set_font("Arial", '', 11)
-    clean_notes = notes.encode('latin-1', 'replace').decode('latin-1') if notes else "No notes provided."
-    pdf.multi_cell(0, 8, clean_notes)
+    
+    # Расчет текущих метрик из Valuation Lab (из v_state)
+    div_0 = v_state.get('ddm_div', 0)
+    g_div = v_state.get('ddm_g', 0) / 100
+    ke = v_state.get('ddm_ke', 1) / 100
+    ddm_val = div_0 * (1 + g_div) / (ke - g_div) if ke > g_div else 0
+
+    fcf_base = v_state.get('dcf_fcf', 0)
+    growth_rate = v_state.get('dcf_g', 0) / 100
+    terminal_growth = v_state.get('dcf_tg', 0) / 100
+    wacc = v_state.get('dcf_wacc', 1) / 100
+    shares_out = v_state.get('dcf_shares', 1)
+    net_debt = v_state.get('dcf_debt', 0)
+    fcfs, pvs = [], []
+    for year in range(1, 6):
+        fcf = fcf_base * ((1 + growth_rate) ** year)
+        pv = fcf / ((1 + wacc) ** year)
+        fcfs.append(fcf); pvs.append(pv)
+    terminal_value = (fcfs[-1] * (1 + terminal_growth)) / (wacc - terminal_growth) if wacc > terminal_growth else 0
+    pv_tv = terminal_value / ((1 + wacc) ** 5)
+    enterprise_val = sum(pvs) + pv_tv
+    equity_val = enterprise_val - net_debt
+    dcf_val = equity_val / shares_out if shares_out > 0 else 0
+
+    pdf.cell(100, 8, "Gordon Growth Model (DDM)", border=1)
+    pdf.cell(80, 8, f"${ddm_val:,.2f}" if ddm_val > 0 else "N/A", border=1, ln=True)
+    pdf.cell(100, 8, "Discounted Cash Flow (DCF)", border=1)
+    pdf.cell(80, 8, f"${dcf_val:,.2f}" if dcf_val > 0 else "N/A", border=1, ln=True)
+    pdf.ln(3)
+
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, "B. Excel-based Valuation Targets:", ln=True)
+    pdf.set_font("Arial", '', 11)
+    if os.path.exists(path):
+        xls = pd.ExcelFile(path)
+        excel_vals = {}
+        for m in xls.sheet_names:
+            m_str = str(m).strip()
+            if m_str.startswith("In.Val -") or "relative valuation" in m_str.lower() or "multiples" in m_str.lower():
+                df_val = pd.read_excel(xls, sheet_name=m_str)
+                if "relative" in m_str.lower() or "multiples" in m_str.lower():
+                    rel_data = extract_relative_valuation_data(df_val)
+                    if rel_data:
+                        for item in rel_data:
+                            avg_val = sum(item["Peers"].values()) / len(item["Peers"]) if item["Peers"] else 0
+                            excel_vals[f"Relative: {item['Metric']}"] = avg_val
+                else:
+                    found_vals = find_intrinsic_values(df_val)
+                    excel_vals.update(found_vals)
+
+        if excel_vals:
+            fill = False
+            for k, v in excel_vals.items():
+                pdf.cell(100, 8, str(k), border=1, fill=fill)
+                pdf.cell(80, 8, f"${v:,.2f}", border=1, ln=True, fill=fill)
+                fill = not fill
+        else:
+            no_info()
+    else:
+        no_info()
+    pdf.ln(3)
+
+    # 4. COMPARISON RESULTS
+    section_title("4. Watchlist Comparison Summary")
+    if not df_watchlist.empty:
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(40, 8, "Ticker", border=1)
+        pdf.cell(40, 8, "Price", border=1)
+        pdf.cell(40, 8, "Int. Value", border=1)
+        pdf.cell(60, 8, "Potential", border=1, ln=True)
+
+        pdf.set_font("Arial", '', 10)
+        fill = False
+        for i, r in df_watchlist.iterrows():
+            pdf.cell(40, 8, str(r['Stock']), border=1, fill=fill)
+            pdf.cell(40, 8, str(r['Market price']), border=1, fill=fill)
+            pdf.cell(40, 8, str(r['Intrinsic value']), border=1, fill=fill)
+            pdf.cell(60, 8, str(r['Potential']), border=1, ln=True, fill=fill)
+            fill = not fill
+        pdf.ln(5)
+    else:
+        no_info()
+
+    # 5. NOTES
+    section_title("5. Analyst Notes & Thesis")
+    note_path = os.path.join(NOTES_DIR, f"{ticker}_notes.txt")
+    if os.path.exists(note_path):
+        with open(note_path, "r", encoding="utf-8") as f:
+            notes = f.read().strip()
+        if notes:
+            pdf.set_font("Arial", '', 11)
+            clean_notes = notes.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 6, clean_notes)
+        else:
+            no_info()
+    else:
+        no_info()
+
     return pdf.output(dest='S').encode('latin-1')
 
 @st.cache_data(ttl=3600)
@@ -508,19 +676,9 @@ if app_mode == "Terminal (Analysis)":
                     fig.update_layout(height=500, margin=dict(l=0,r=0,t=10,b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0d8c8'))
                     st.plotly_chart(fig, use_container_width=True)
             except: st.error("Error fetching chart data.")
-            
-            st.markdown("<hr>", unsafe_allow_html=True)
-            st.subheader(f"📰 Recent News for {selected_ticker}")
-            news_data = fetch_robust_news(selected_ticker)
-            if news_data:
-                for article in news_data:
-                    st.markdown(f"**[{article['title']}]({article['link']})**")
-                    st.caption(f"Yahoo Finance RSS • {article['date']}")
-                    st.markdown("<br>", unsafe_allow_html=True)
-            else: st.info("No recent news found for this ticker.")
         else: st.warning("Your watchlist is empty.")
 
-    # --- PAGE 3: RATIOS (Возвращение к Excel + Живой NWC) ---
+    # --- PAGE 3: RATIOS (EXCEL + NWC) ---
     with tab_ratios:
         if selected_ticker and selected_ticker != "":
             st.subheader(f"Financial Ratios: {selected_ticker}")
@@ -534,10 +692,11 @@ if app_mode == "Terminal (Analysis)":
                     if key_metrics:
                         latest_year = key_metrics.pop("_latest_year", "Latest")
                         
-                        # Добавляем Net Working Capital из живых данных yfinance
-                        live_ratios, _ = fetch_live_financials(selected_ticker)
-                        if live_ratios and "Net Working Capital" in live_ratios:
-                            key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
+                        # Live NWC injection
+                        with st.spinner("Calculating Net Working Capital..."):
+                            live_ratios, _ = fetch_live_financials(selected_ticker)
+                            if live_ratios and "Net Working Capital" in live_ratios:
+                                key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
                         
                         st.write(f"**Key Performance Indicators ({latest_year})**")
                         cols = st.columns(5)
@@ -672,15 +831,16 @@ if app_mode == "Terminal (Analysis)":
                     st.success("Investment notes saved securely!")
             
             with col_pdf:
+                # ГЕНЕРАЦИЯ ОБНОВЛЕННОГО ПОЛНОГО PDF
                 current_p = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Market price'].values[0]
-                int_val = df_watchlist.loc[df_watchlist['Stock'] == selected_ticker, 'Intrinsic value'].values[0]
                 
-                pdf_bytes = generate_pdf_report(selected_ticker, current_p, int_val, new_note)
+                with st.spinner("Compiling full PDF Report..."):
+                    pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, st.session_state.v_state)
                 
                 st.download_button(
-                    label="📥 Export PDF Report",
+                    label="📥 Export Full PDF Report",
                     data=pdf_bytes,
-                    file_name=f"{selected_ticker}_Pax_Report.pdf",
+                    file_name=f"{selected_ticker}_Pax_Full_Report.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
@@ -694,7 +854,7 @@ elif app_mode == "Macro Dashboard":
     render_header()
     st.subheader("🌍 Macroeconomic & Market Overview")
     
-    # Селекторы периода и интервала для макро-дашборда
+    # Селекторы периода и интервала
     col_macro_period, col_macro_interval, _ = st.columns([1, 1, 3])
     with col_macro_period: 
         m_period_ui = st.selectbox("Timeframe", ["1 Month", "6 Months", "1 Year", "5 Years", "10 Years", "Max"], index=4, key="macro_period")
@@ -720,10 +880,9 @@ elif app_mode == "Macro Dashboard":
                 tk = yf.Ticker(symbol)
                 hist = tk.history(period=period, interval=interval)
                 if not hist.empty and len(hist) > 1:
-                    hist = hist.dropna(subset=['Close']) # Очистка от пустых строк
+                    hist = hist.dropna(subset=['Close'])
                     hist_data[name] = hist['Close']
                     
-                    # Дельта (разница) рассчитывается между двумя последними точками на графике
                     current_price = hist['Close'].iloc[-1]
                     prev_price = hist['Close'].iloc[-2]
                     pct_change = ((current_price - prev_price) / prev_price) * 100
