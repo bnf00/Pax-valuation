@@ -27,14 +27,18 @@ if 'v_state' not in st.session_state:
     }
 
 # ==========================================
-# BACKGROUND IMAGE INJECTION
+# ОПТИМИЗАЦИЯ 1: КЭШИРОВАНИЕ ФОНА
 # ==========================================
+@st.cache_data
+def get_base64_bg(file_path):
+    with open(file_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode()
+
 def add_bg_from_local():
     bg_file = "bg.jpg" if os.path.exists("bg.jpg") else ("bg.png" if os.path.exists("bg.png") else None)
     if bg_file:
-        with open(bg_file, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode()
-            ext = "jpg" if "jpg" in bg_file.lower() else "png"
+        encoded_string = get_base64_bg(bg_file)
+        ext = "jpg" if "jpg" in bg_file.lower() else "png"
         st.markdown(f"""<style>.stApp {{ background-image: url(data:image/{ext};base64,{encoded_string}); background-size: cover; background-position: center; background-attachment: fixed; }}</style>""", unsafe_allow_html=True)
     else:
         st.warning("Background image not found. Please save it as 'bg.jpg' or 'bg.png' in the same folder as app.py.")
@@ -83,7 +87,7 @@ div[data-testid="stDataFrame"] { background-color: transparent !important; }
 st.markdown(css_code, unsafe_allow_html=True)
 
 # ==========================================
-# RATIO EXPLANATIONS & CORE FUNCTIONS
+# RATIO EXPLANATIONS & ОПТИМИЗИРОВАННЫЕ ФУНКЦИИ
 # ==========================================
 RATIO_EXPLANATIONS = {
     "Current Ratio": "Liquidity: Measures a company's ability to pay short-term obligations.",
@@ -103,6 +107,7 @@ NOTES_DIR = "notes"
 if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
 if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 
+@st.cache_data(ttl=3600) # Кэшируем поиск компаний на час
 def search_company(query):
     query = str(query).strip()
     if not query: return "", ""
@@ -118,6 +123,8 @@ def search_company(query):
     except Exception: pass
     return query.upper(), query
 
+# ОПТИМИЗАЦИЯ 2: Кэшируем текущую цену на 15 минут
+@st.cache_data(ttl=900)
 def get_current_price(ticker):
     try:
         stock = yf.Ticker(ticker)
@@ -149,6 +156,8 @@ def clean_excel_data(df):
         except: return str(x)
     return df.map(format_cell) if hasattr(df, 'map') else df.applymap(format_cell)
 
+# ОПТИМИЗАЦИЯ 3: Кэшируем новости на 1 час
+@st.cache_data(ttl=3600)
 def fetch_robust_news(ticker):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
     articles = []
@@ -369,15 +378,45 @@ if app_mode == "Terminal (Analysis)":
         
         col_btn, col_search = st.columns([1, 4])
         with col_btn:
+            # ОПТИМИЗАЦИЯ 4: Быстрое (пакетное) обновление цен
             if st.button("🔄 Update Market Data", use_container_width=True):
-                with st.spinner('Fetching prices...'):
-                    for i, r in df_watchlist.iterrows():
-                        p = get_current_price(r['Stock'])
-                        if isinstance(p, float):
-                            df_watchlist.at[i, 'Market price'] = f"${p}"
-                            df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
+                with st.spinner('Fetching live prices...'):
+                    # Принудительно очищаем кэш цен перед обновлением
+                    get_current_price.clear()
+                    
+                    tickers_list = df_watchlist['Stock'].tolist()
+                    if tickers_list:
+                        try:
+                            # Пытаемся скачать данные списком (может быть быстрее)
+                            data = yf.download(tickers_list, period="1d", progress=False)
+                            if not data.empty and 'Close' in data:
+                                close_data = data['Close']
+                                for i, r in df_watchlist.iterrows():
+                                    ticker = r['Stock']
+                                    p = "Error"
+                                    try:
+                                        if isinstance(close_data, pd.DataFrame) and ticker in close_data.columns:
+                                            p = round(float(close_data[ticker].dropna().iloc[-1]), 2)
+                                        elif isinstance(close_data, pd.Series): 
+                                            p = round(float(close_data.dropna().iloc[-1]), 2)
+                                    except:
+                                        # Резервный вариант, если yf.download отдал странный формат
+                                        p = get_current_price(ticker)
+                                        
+                                    if isinstance(p, (float, int)):
+                                        df_watchlist.at[i, 'Market price'] = f"${p}"
+                                        df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
+                        except:
+                            # Полный фоллбэк: загружаем по одному, если yf.download упал
+                            for i, r in df_watchlist.iterrows():
+                                p = get_current_price(r['Stock'])
+                                if isinstance(p, float):
+                                    df_watchlist.at[i, 'Market price'] = f"${p}"
+                                    df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
+                                    
                     save_db(df_watchlist)
                     st.rerun()
+                    
         with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
 
         display_df = df_watchlist.copy()
