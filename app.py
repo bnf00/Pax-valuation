@@ -483,6 +483,41 @@ def fetch_dividend_yield(ticker):
         return float(div)
     except: return 0.0
 
+@st.cache_data(ttl=3600)
+def fetch_screener_data(tickers):
+    """Функция для извлечения данных для Stock Screener из заданного списка тикеров."""
+    data_list = []
+    for t in tickers:
+        try:
+            tk = yf.Ticker(t)
+            info = tk.info
+            
+            # Извлекаем нужные метрики
+            market_cap = info.get('marketCap', 0)
+            pe_ratio = info.get('trailingPE', info.get('forwardPE', 0))
+            roe = info.get('returnOnEquity', 0)
+            debt_to_equity = info.get('debtToEquity', 0)
+            price = info.get('currentPrice', info.get('previousClose', 0))
+            fcf = info.get('freeCashflow', 0)
+            shares = info.get('sharesOutstanding', 0)
+            total_debt = info.get('totalDebt', 0)
+            
+            if market_cap > 0 and price > 0:
+                data_list.append({
+                    'Ticker': t,
+                    'Price': price,
+                    'Market Cap ($B)': market_cap / 1e9,
+                    'P/E Ratio': pe_ratio if pe_ratio else None,
+                    'ROE (%)': roe * 100 if roe else None,
+                    'Debt/Equity': debt_to_equity / 100 if debt_to_equity else None, # yfinance often gives D/E as percentage (e.g. 150 for 1.5)
+                    '_fcf': fcf,
+                    '_shares': shares,
+                    '_debt': total_debt
+                })
+        except:
+            continue
+    return pd.DataFrame(data_list)
+
 def clean_excel_data(df):
     def format_cell(x):
         if pd.isna(x) or str(x).strip() in ['#DIV/0!', '#VALUE!', '#N/A', 'None', '#REF!', '']: return '-'
@@ -606,7 +641,9 @@ def save_db(df): df.to_csv(DB_FILE, index=False)
 # SIDEBAR NAVIGATION
 # ==========================================
 st.sidebar.markdown("""<div class="nav-header"><h3>Navigation</h3></div>""", unsafe_allow_html=True)
-app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "Macro Dashboard", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
+
+# ДОБАВЛЕНА НОВАЯ ВКЛАДКА "Stock Screener"
+app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "Macro Dashboard", "Stock Screener", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
 
 def render_header():
     st.markdown("""
@@ -709,12 +746,10 @@ def render_ddm_lab(ticker, current_p, ticker_state):
     col_inputs, col_results = st.columns([1, 2], gap="large")
     with col_inputs:
         st.markdown("#### ⚙️ DDM Assumptions")
-        # Сохраняем состояние при изменении ползунков
         div_0 = st.number_input("Current Annual Dividend per Share ($)", value=float(ticker_state['ddm_div']), step=0.1, key=f"d_div_{ticker}")
         g_div_raw = st.slider("Expected Dividend Growth Rate", min_value=0.0, max_value=15.0, value=float(ticker_state['ddm_g']), step=0.1, format="%f%%", key=f"d_g_{ticker}")
         ke_raw = st.slider("Cost of Equity (Expected Return)", min_value=1.0, max_value=25.0, value=float(ticker_state['ddm_ke']), step=0.5, format="%f%%", key=f"d_ke_{ticker}")
         
-        # Автосохранение в JSON
         ticker_state['ddm_div'] = div_0
         ticker_state['ddm_g'] = g_div_raw
         ticker_state['ddm_ke'] = ke_raw
@@ -744,7 +779,7 @@ def render_ddm_lab(ticker, current_p, ticker_state):
             df_watchlist.loc[df_watchlist['Stock']==ticker, 'Intrinsic value'] = intrinsic_value
             df_watchlist.loc[df_watchlist['Stock']==ticker, 'Potential'] = calculate_potential(str(current_p), intrinsic_value)
             save_db(df_watchlist)
-            st.rerun() # Полная перезагрузка чтобы обновить Watchlist везде
+            st.rerun() 
             
     st.markdown("""<div class="guide-box"><h4>💡 Шпаргалка аналитика: Gordon Growth Model (DDM)</h4><ul><li><b>Когда использовать:</b> Для зрелых компаний, которые стабильно платят дивиденды и имеют четкую дивидендную политику. Предполагается, что дивиденды будут расти постоянным темпом вечно.</li><li><b>Идеальные кандидаты:</b> Коммунальные предприятия (Utilities), телекоммуникации (AT&T, Verizon), крупные банки (JPMorgan), устоявшиеся потребительские бренды (Coca-Cola, P&G).</li><li><b>Когда НЕ использовать:</b> Для компаний, которые не платят дивиденды (Amazon, Meta) или для быстрорастущих стартапов.</li></ul></div>""", unsafe_allow_html=True)
 
@@ -884,7 +919,6 @@ def render_relative_lab(ticker, current_p, ticker_state):
             save_db(df_watchlist)
             st.rerun()
 
-    # Сохраняем в БД при любых изменениях во фрагменте
     ticker_state['rel_eps'] = base_eps; ticker_state['rel_pe'] = target_pe
     ticker_state['rel_ebitda'] = base_ebitda; ticker_state['rel_eveb'] = target_eveb; ticker_state['rel_sh1'] = sh_ebitda; ticker_state['rel_nd1'] = nd_ebitda
     ticker_state['rel_rev'] = base_rev; ticker_state['rel_evs'] = target_evs; ticker_state['rel_sh2'] = sh_rev; ticker_state['rel_nd2'] = nd_rev
@@ -986,7 +1020,7 @@ if app_mode == "Terminal (Analysis)":
         )
         if not edited_df.equals(display_df): df_watchlist.update(edited_df); save_db(df_watchlist); st.rerun()
 
-    # --- PROFILE (ИСПОЛЬЗУЕТ ФРАГМЕНТ) ---
+    # --- PROFILE ---
     with tab_profile:
         if selected_ticker and selected_ticker != "":
             iv_raw = df_watchlist.loc[df_watchlist['Stock']==selected_ticker, 'Intrinsic value'].values[0]
@@ -1137,12 +1171,112 @@ if app_mode == "Terminal (Analysis)":
         else: st.warning("Your watchlist is empty.")
 
 # ==========================================
-# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД (ИСПОЛЬЗУЕТ ФРАГМЕНТ)
+# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД 
 # ==========================================
 elif app_mode == "Macro Dashboard":
     render_header()
     st.subheader("🌍 Macroeconomic & Market Overview")
     render_macro_section()
+
+# ==========================================
+# НОВЫЙ РОУТИНГ: STOCK SCREENER
+# ==========================================
+elif app_mode == "Stock Screener":
+    render_header()
+    st.subheader("🕵️‍♂️ Quantitative Stock Screener")
+    
+    st.markdown("""
+        **Demo Universe:** Из-за ограничений бесплатного API (запрет на массовый спам-парсинг), в текущей версии 
+        терминала сканируются **Топ-30 крупнейших компаний США**. После подключения профессионального API этот 
+        скринер будет искать акции среди всех 6000 компаний рынка.
+    """)
+    
+    # 30 популярных компаний для демонстрации профессору
+    demo_universe = [
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'BRK-B', 'JNJ', 'JPM', 'V', 'PG', 
+        'NVDA', 'HD', 'CVX', 'MA', 'PEP', 'KO', 'MRK', 'TSLA', 'COST', 'MCD', 
+        'WMT', 'ABBV', 'CRM', 'BAC', 'ACN', 'LIN', 'DIS', 'ADBE', 'CSCO', 'NFLX'
+    ]
+
+    st.markdown("### 1. Set Screening Criteria")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        min_cap = st.number_input("Min Market Cap ($B)", value=50.0, step=10.0)
+    with col2:
+        max_pe = st.number_input("Max P/E Ratio", value=30.0, step=1.0)
+    with col3:
+        min_roe = st.number_input("Min ROE (%)", value=15.0, step=1.0)
+    with col4:
+        max_debt_eq = st.number_input("Max Debt/Equity", value=1.5, step=0.1)
+
+    if st.button("🚀 Run Scan & Auto-Valuation", type="primary"):
+        with st.spinner("Scanning 30 companies and running Auto-DCF models... (This takes about 10 seconds)"):
+            
+            raw_data = fetch_screener_data(demo_universe)
+            
+            if not raw_data.empty:
+                # 1. Применяем фильтры скринера
+                filtered = raw_data[
+                    (raw_data['Market Cap ($B)'] >= min_cap) &
+                    (raw_data['P/E Ratio'] <= max_pe) &
+                    (raw_data['ROE (%)'] >= min_roe) &
+                    (raw_data['Debt/Equity'] <= max_debt_eq)
+                ].copy()
+                
+                # 2. Bulk Valuation (Пакетная оценка через Auto-DCF)
+                # Для примера берем консервативные параметры по умолчанию:
+                auto_wacc = 0.09 # 9%
+                auto_growth = 0.10 # 10%
+                auto_term_growth = 0.025 # 2.5%
+                
+                intrinsic_vals = []
+                upsides = []
+                
+                for idx, row in filtered.iterrows():
+                    fcf = row['_fcf']
+                    shares = row['_shares']
+                    debt = row['_debt']
+                    price = row['Price']
+                    
+                    if pd.isna(fcf) or fcf <= 0 or shares == 0:
+                        intrinsic_vals.append(None)
+                        upsides.append(None)
+                        continue
+                        
+                    # DCF Logic
+                    pvs = []
+                    for year in range(1, 6):
+                        fcf_proj = fcf * ((1 + auto_growth) ** year)
+                        pv = fcf_proj / ((1 + auto_wacc) ** year)
+                        pvs.append(pv)
+                    
+                    tv = (fcf * ((1 + auto_growth)**5) * (1 + auto_term_growth)) / (auto_wacc - auto_term_growth)
+                    pv_tv = tv / ((1 + auto_wacc) ** 5)
+                    
+                    ev = sum(pvs) + pv_tv
+                    equity = ev - debt
+                    i_val = equity / shares
+                    
+                    intrinsic_vals.append(round(i_val, 2))
+                    upsides.append(round(((i_val - price) / price) * 100, 2))
+                    
+                filtered['Auto-DCF Value ($)'] = intrinsic_vals
+                filtered['Upside (%)'] = upsides
+                
+                # Скрываем сырые технические колонки перед выводом
+                display_results = filtered.drop(columns=['_fcf', '_shares', '_debt'])
+                
+                # Сортируем по апсайду
+                display_results = display_results.sort_values(by='Upside (%)', ascending=False)
+                
+                st.success(f"Scan complete! Found {len(display_results)} companies matching your criteria.")
+                st.dataframe(display_results, use_container_width=True, hide_index=True)
+                
+                st.info("💡 **Pro Tip:** To do a deep dive, add one of these tickers to your Watchlist in the Terminal tab and run detailed models in the Valuation Lab.")
+                
+            else:
+                st.error("Failed to fetch data from Yahoo Finance.")
 
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
@@ -1211,7 +1345,7 @@ elif app_mode == "My Portfolio":
     else: st.info("Your portfolio is empty. Go to 'Terminal (Analysis)' -> 'Watchlist' and tick the 'Portfolio' checkbox next to a company to add it here.")
 
 # ==========================================
-# РОУТИНГ: VALUATION LAB (ИСПОЛЬЗУЕТ ФРАГМЕНТЫ ДЛЯ КАЖДОГО МЕТОДА)
+# РОУТИНГ: VALUATION LAB 
 # ==========================================
 elif app_mode == "Valuation Lab":
     render_header()
