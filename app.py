@@ -131,7 +131,7 @@ RATIO_EXPLANATIONS = {
     "ROE": "Profitability (Return on Equity): Profitable relative to shareholders equity.",
     "Debt to Assets": "Solvency: Proportion of assets financed by debt.",
     "Interest Earned": "Solvency: Ability to cover interest expenses.",
-    "Net Working Capital (Live)": "Absolute liquidity measure: Current Assets minus Current Liabilities (Auto-fetched via Yahoo Finance)."
+    "Net Working Capital (Live)": "Absolute liquidity measure: Current Assets minus Current Liabilities."
 }
 
 FILES_DIR = "analyses"
@@ -142,7 +142,7 @@ if not os.path.exists(NOTES_DIR): os.makedirs(NOTES_DIR)
 # ---------------------------------------------------------
 # PDF 1: TERMINAL REPORT
 # ---------------------------------------------------------
-def generate_full_pdf_report(ticker, df_watchlist, v_state):
+def generate_full_pdf_report(ticker, df_watchlist, v_state, fmp_key):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -202,9 +202,9 @@ def generate_full_pdf_report(ticker, df_watchlist, v_state):
                 metrics.update(key_metrics)
                 ratios_found = True
 
-    live_ratios, _ = fetch_live_financials(ticker)
-    if live_ratios and "Net Working Capital" in live_ratios:
-        metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
+    live_ratios, _ = fetch_live_financials(ticker, fmp_key)
+    if live_ratios and "Net Working Capital (Live)" in live_ratios:
+        metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital (Live)"]
         ratios_found = True
 
     if ratios_found and metrics:
@@ -399,7 +399,7 @@ def generate_valuation_pdf(ticker, v_state):
     return pdf.output(dest='S').encode('latin-1')
 
 # ---------------------------------------------------------
-# DATA FETCHING CACHED FUNCTIONS
+# DATA FETCHING CACHED FUNCTIONS (PRO API)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def search_company(query):
@@ -418,7 +418,18 @@ def search_company(query):
     return query.upper(), query
 
 @st.cache_data(ttl=900)
-def get_current_price(ticker):
+def get_current_price(ticker, api_key):
+    # FMP Integration 1: Fast Quotes
+    if api_key:
+        try:
+            url = f"https://financialmodelingprep.com/api/v3/quote-short/{ticker}?apikey={api_key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                if data: return round(data[0]['price'], 2)
+        except: pass
+        
+    # Fallback to yfinance
     try:
         stock = yf.Ticker(ticker)
         return round(stock.fast_info['last_price'], 2)
@@ -457,7 +468,22 @@ def fetch_robust_news(ticker):
     return articles
 
 @st.cache_data(ttl=86400)
-def fetch_live_financials(ticker):
+def fetch_live_financials(ticker, api_key):
+    # FMP Integration 2: Accurate Balance Sheet
+    if api_key:
+        try:
+            url = f"https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?limit=1&apikey={api_key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                if data:
+                    ca = data[0].get('totalCurrentAssets', 0)
+                    cl = data[0].get('totalCurrentLiabilities', 0)
+                    nwc = ca - cl
+                    return {"Net Working Capital (Live)": f"${nwc:,.0f}" if nwc != 0 else "N/A"}, str(data[0].get('calendarYear', 'Live'))
+        except: pass
+        
+    # Fallback to yfinance
     try:
         stock = yf.Ticker(ticker)
         bs = stock.balance_sheet
@@ -469,7 +495,7 @@ def fetch_live_financials(ticker):
         current_assets = get_metric(bs, 'Current Assets', latest_bs_col)
         current_liabilities = get_metric(bs, 'Current Liabilities', latest_bs_col)
         nwc = current_assets - current_liabilities
-        formatted = {"Net Working Capital": f"${nwc:,.0f}" if nwc != 0 else "N/A"}
+        formatted = {"Net Working Capital (Live)": f"${nwc:,.0f}" if nwc != 0 else "N/A"}
         return formatted, str(latest_bs_col.year)
     except Exception: return None, None
 
@@ -484,22 +510,38 @@ def fetch_dividend_yield(ticker):
     except: return 0.0
 
 @st.cache_data(ttl=3600)
-def fetch_screener_data(tickers):
-    """Функция для извлечения данных для Stock Screener из заданного списка тикеров."""
+def fetch_screener_data(tickers, api_key):
     data_list = []
+    fmp_quotes = {}
+    
+    # FMP Integration 3: Batch API Call for Screener (1 call for 30 tickers!)
+    if api_key:
+        try:
+            t_str = ",".join(tickers)
+            url = f"https://financialmodelingprep.com/api/v3/quote/{t_str}?apikey={api_key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                fmp_data = json.loads(response.read().decode('utf-8'))
+                for item in fmp_data:
+                    fmp_quotes[item['symbol']] = item
+        except: pass
+
     for t in tickers:
         try:
             tk = yf.Ticker(t)
             info = tk.info
             
-            # Извлекаем нужные метрики
-            market_cap = info.get('marketCap', 0)
-            pe_ratio = info.get('trailingPE', info.get('forwardPE', 0))
+            # Hybrid Data: FMP (Fast & Accurate) + Yahoo (Fallback)
+            fmp_q = fmp_quotes.get(t, {})
+            
+            market_cap = fmp_q.get('marketCap', info.get('marketCap', 0))
+            price = fmp_q.get('price', info.get('currentPrice', info.get('previousClose', 0)))
+            pe_ratio = fmp_q.get('pe', info.get('trailingPE', info.get('forwardPE', 0)))
+            
             roe = info.get('returnOnEquity', 0)
             debt_to_equity = info.get('debtToEquity', 0)
-            price = info.get('currentPrice', info.get('previousClose', 0))
             fcf = info.get('freeCashflow', 0)
-            shares = info.get('sharesOutstanding', 0)
+            shares = fmp_q.get('sharesOutstanding', info.get('sharesOutstanding', 0))
             total_debt = info.get('totalDebt', 0)
             
             if market_cap > 0 and price > 0:
@@ -509,7 +551,7 @@ def fetch_screener_data(tickers):
                     'Market Cap ($B)': market_cap / 1e9,
                     'P/E Ratio': pe_ratio if pe_ratio else None,
                     'ROE (%)': roe * 100 if roe else None,
-                    'Debt/Equity': debt_to_equity / 100 if debt_to_equity else None, # yfinance often gives D/E as percentage (e.g. 150 for 1.5)
+                    'Debt/Equity': debt_to_equity / 100 if debt_to_equity else None,
                     '_fcf': fcf,
                     '_shares': shares,
                     '_debt': total_debt
@@ -638,12 +680,17 @@ else:
 def save_db(df): df.to_csv(DB_FILE, index=False)
 
 # ==========================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION & SETTINGS
 # ==========================================
 st.sidebar.markdown("""<div class="nav-header"><h3>Navigation</h3></div>""", unsafe_allow_html=True)
 
-# ДОБАВЛЕНА НОВАЯ ВКЛАДКА "Stock Screener"
 app_mode = st.sidebar.radio("Select View:", ["Terminal (Analysis)", "Macro Dashboard", "Stock Screener", "My Portfolio", "Valuation Lab"], label_visibility="collapsed")
+
+st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
+st.sidebar.markdown("""<div class="nav-header"><h3>⚙️ System Settings</h3></div>""", unsafe_allow_html=True)
+fmp_api_key = st.sidebar.text_input("FMP API Key", value="zEPNYuuBM725m3jYTpfz8BIZ230nI3Ca", type="password")
+if fmp_api_key:
+    st.sidebar.caption("✅ Pro API Connected")
 
 def render_header():
     st.markdown("""
@@ -947,7 +994,7 @@ if app_mode == "Terminal (Analysis)":
                     ni = st.selectbox("Interest", ["5 - Critical", "4 - High", "3 - Medium", "2 - Low", "1 - Watch"])
                     if st.form_submit_button("Add") and nt:
                         real_ticker, real_name = search_company(nt)
-                        price = get_current_price(real_ticker)
+                        price = get_current_price(real_ticker, fmp_api_key)
                         new_row = pd.DataFrame([{"Stock": real_ticker, "Company name": real_name, "Interest": ni, "Market price": f"${price}", "Intrinsic value": 0.0, "Potential": "N/A", "In Portfolio": False, "Shares": 0.0, "Avg Cost": 0.0}])
                         for col in ["Stock", "Company name", "Interest", "Market price", "Potential"]: new_row[col] = new_row[col].astype('object')
                         df_watchlist = pd.concat([df_watchlist, new_row], ignore_index=True)
@@ -979,27 +1026,11 @@ if app_mode == "Terminal (Analysis)":
             if st.button("🔄 Update Market Data", use_container_width=True):
                 with st.spinner('Fetching live prices...'):
                     get_current_price.clear()
-                    tickers_list = df_watchlist['Stock'].tolist()
-                    if tickers_list:
-                        try:
-                            data = yf.download(tickers_list, period="1d", progress=False)
-                            if not data.empty and 'Close' in data:
-                                close_data = data['Close']
-                                for i, r in df_watchlist.iterrows():
-                                    ticker = r['Stock']; p = "Error"
-                                    try:
-                                        if isinstance(close_data, pd.DataFrame) and ticker in close_data.columns: p = round(float(close_data[ticker].dropna().iloc[-1]), 2)
-                                        elif isinstance(close_data, pd.Series): p = round(float(close_data.dropna().iloc[-1]), 2)
-                                    except: p = get_current_price(ticker)
-                                    if isinstance(p, (float, int)):
-                                        df_watchlist.at[i, 'Market price'] = f"${p}"
-                                        df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
-                        except:
-                            for i, r in df_watchlist.iterrows():
-                                p = get_current_price(r['Stock'])
-                                if isinstance(p, float):
-                                    df_watchlist.at[i, 'Market price'] = f"${p}"
-                                    df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
+                    for i, r in df_watchlist.iterrows():
+                        p = get_current_price(r['Stock'], fmp_api_key)
+                        if isinstance(p, (float, int)):
+                            df_watchlist.at[i, 'Market price'] = f"${p}"
+                            df_watchlist.at[i, 'Potential'] = calculate_potential(f"${p}", r['Intrinsic value'])
                     save_db(df_watchlist); st.rerun()
                     
         with col_search: search_query = st.text_input("Search", label_visibility="collapsed", placeholder="🔍 Search company or ticker...")
@@ -1039,9 +1070,9 @@ if app_mode == "Terminal (Analysis)":
                     key_metrics = extract_key_ratios(df)
                     if key_metrics:
                         latest_year = key_metrics.pop("_latest_year", "Latest")
-                        with st.spinner("Calculating Net Working Capital..."):
-                            live_ratios, _ = fetch_live_financials(selected_ticker)
-                            if live_ratios and "Net Working Capital" in live_ratios: key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
+                        with st.spinner("Calculating Net Working Capital via FMP..."):
+                            live_ratios, _ = fetch_live_financials(selected_ticker, fmp_api_key)
+                            if live_ratios and "Net Working Capital (Live)" in live_ratios: key_metrics["Net Working Capital (Live)"] = live_ratios["Net Working Capital (Live)"]
                         st.write(f"**Key Performance Indicators ({latest_year})**")
                         cols = st.columns(5)
                         for i, (name, val) in enumerate(key_metrics.items()):
@@ -1068,7 +1099,7 @@ if app_mode == "Terminal (Analysis)":
                 if display_to_original:
                     selected_model_display = st.radio("Select Model Setup:", list(display_to_original.keys()), horizontal=True)
                     df = pd.read_excel(path, sheet_name=display_to_original[selected_model_display])
-                    current_p = get_current_price(selected_ticker)
+                    current_p = get_current_price(selected_ticker, fmp_api_key)
                     is_relative = "relative" in selected_model_display.lower() or "multiples" in selected_model_display.lower()
                     
                     if is_relative:
@@ -1139,8 +1170,8 @@ if app_mode == "Terminal (Analysis)":
                                     comp_info.update(ratios)
                             except: pass
                             
-                        live_ratios, _ = fetch_live_financials(t)
-                        if live_ratios and "Net Working Capital" in live_ratios: comp_info["Net Working Capital (Live)"] = live_ratios["Net Working Capital"]
+                        live_ratios, _ = fetch_live_financials(t, fmp_api_key)
+                        if live_ratios and "Net Working Capital (Live)" in live_ratios: comp_info["Net Working Capital (Live)"] = live_ratios["Net Working Capital (Live)"]
                         compare_data[t] = comp_info
                 df_compare = pd.DataFrame(compare_data); df_compare.fillna("N/A", inplace=True)
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1166,12 +1197,12 @@ if app_mode == "Terminal (Analysis)":
             with col_pdf:
                 with st.spinner("Compiling Terminal Report..."):
                     ticker_state = get_safe_v_state(selected_ticker)
-                    pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, ticker_state)
+                    pdf_bytes = generate_full_pdf_report(selected_ticker, df_watchlist, ticker_state, fmp_api_key)
                 st.download_button(label="📥 Export Terminal Report (PDF)", data=pdf_bytes, file_name=f"{selected_ticker}_Terminal_Report.pdf", mime="application/pdf", use_container_width=True)
         else: st.warning("Your watchlist is empty.")
 
 # ==========================================
-# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД 
+# РОУТИНГ: МАКРОЭКОНОМИЧЕСКИЙ ДАШБОРД
 # ==========================================
 elif app_mode == "Macro Dashboard":
     render_header()
@@ -1179,7 +1210,7 @@ elif app_mode == "Macro Dashboard":
     render_macro_section()
 
 # ==========================================
-# НОВЫЙ РОУТИНГ: STOCK SCREENER
+# РОУТИНГ: STOCK SCREENER
 # ==========================================
 elif app_mode == "Stock Screener":
     render_header()
@@ -1191,7 +1222,6 @@ elif app_mode == "Stock Screener":
         скринер будет искать акции среди всех 6000 компаний рынка.
     """)
     
-    # 30 популярных компаний для демонстрации профессору
     demo_universe = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'BRK-B', 'JNJ', 'JPM', 'V', 'PG', 
         'NVDA', 'HD', 'CVX', 'MA', 'PEP', 'KO', 'MRK', 'TSLA', 'COST', 'MCD', 
@@ -1201,22 +1231,17 @@ elif app_mode == "Stock Screener":
     st.markdown("### 1. Set Screening Criteria")
     
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        min_cap = st.number_input("Min Market Cap ($B)", value=50.0, step=10.0)
-    with col2:
-        max_pe = st.number_input("Max P/E Ratio", value=30.0, step=1.0)
-    with col3:
-        min_roe = st.number_input("Min ROE (%)", value=15.0, step=1.0)
-    with col4:
-        max_debt_eq = st.number_input("Max Debt/Equity", value=1.5, step=0.1)
+    with col1: min_cap = st.number_input("Min Market Cap ($B)", value=50.0, step=10.0)
+    with col2: max_pe = st.number_input("Max P/E Ratio", value=30.0, step=1.0)
+    with col3: min_roe = st.number_input("Min ROE (%)", value=15.0, step=1.0)
+    with col4: max_debt_eq = st.number_input("Max Debt/Equity", value=1.5, step=0.1)
 
     if st.button("🚀 Run Scan & Auto-Valuation", type="primary"):
-        with st.spinner("Scanning 30 companies and running Auto-DCF models... (This takes about 10 seconds)"):
+        with st.spinner("Fetching Pro API Data and running Auto-DCF models... (FMP Batch Mode active)"):
             
-            raw_data = fetch_screener_data(demo_universe)
+            raw_data = fetch_screener_data(demo_universe, fmp_api_key)
             
             if not raw_data.empty:
-                # 1. Применяем фильтры скринера
                 filtered = raw_data[
                     (raw_data['Market Cap ($B)'] >= min_cap) &
                     (raw_data['P/E Ratio'] <= max_pe) &
@@ -1224,11 +1249,9 @@ elif app_mode == "Stock Screener":
                     (raw_data['Debt/Equity'] <= max_debt_eq)
                 ].copy()
                 
-                # 2. Bulk Valuation (Пакетная оценка через Auto-DCF)
-                # Для примера берем консервативные параметры по умолчанию:
-                auto_wacc = 0.09 # 9%
-                auto_growth = 0.10 # 10%
-                auto_term_growth = 0.025 # 2.5%
+                auto_wacc = 0.09 
+                auto_growth = 0.10 
+                auto_term_growth = 0.025 
                 
                 intrinsic_vals = []
                 upsides = []
@@ -1244,7 +1267,6 @@ elif app_mode == "Stock Screener":
                         upsides.append(None)
                         continue
                         
-                    # DCF Logic
                     pvs = []
                     for year in range(1, 6):
                         fcf_proj = fcf * ((1 + auto_growth) ** year)
@@ -1253,7 +1275,6 @@ elif app_mode == "Stock Screener":
                     
                     tv = (fcf * ((1 + auto_growth)**5) * (1 + auto_term_growth)) / (auto_wacc - auto_term_growth)
                     pv_tv = tv / ((1 + auto_wacc) ** 5)
-                    
                     ev = sum(pvs) + pv_tv
                     equity = ev - debt
                     i_val = equity / shares
@@ -1263,20 +1284,15 @@ elif app_mode == "Stock Screener":
                     
                 filtered['Auto-DCF Value ($)'] = intrinsic_vals
                 filtered['Upside (%)'] = upsides
-                
-                # Скрываем сырые технические колонки перед выводом
                 display_results = filtered.drop(columns=['_fcf', '_shares', '_debt'])
-                
-                # Сортируем по апсайду
                 display_results = display_results.sort_values(by='Upside (%)', ascending=False)
                 
                 st.success(f"Scan complete! Found {len(display_results)} companies matching your criteria.")
                 st.dataframe(display_results, use_container_width=True, hide_index=True)
-                
                 st.info("💡 **Pro Tip:** To do a deep dive, add one of these tickers to your Watchlist in the Terminal tab and run detailed models in the Valuation Lab.")
                 
             else:
-                st.error("Failed to fetch data from Yahoo Finance.")
+                st.error("Failed to fetch data from API. Please check your internet connection or API Key.")
 
 # ==========================================
 # РОУТИНГ: РЕЖИМ ПОРТФЕЛЯ
